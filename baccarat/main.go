@@ -107,7 +107,7 @@ func saveGame(g *game.Game, gameID string) error {
 	return nil
 }
 
-func playOneGame() {
+func playOneGame(showLog bool) {
 	// 生成遊戲ID
 	gameID := uuid.New().String()
 
@@ -115,54 +115,62 @@ func playOneGame() {
 
 	// 初始發牌
 	g.Deal()
-	fmt.Println("=== 初始發牌 ===")
-	fmt.Printf("閒家牌: %s, 初始點數: %d\n", printHand(g.PlayerHand.Cards), g.PlayerScore)
-	fmt.Printf("莊家牌: %s, 初始點數: %d\n", printHand(g.BankerHand.Cards), g.BankerScore)
+	if showLog {
+		fmt.Println("=== 初始發牌 ===")
+		fmt.Printf("閒家牌: %s, 初始點數: %d\n", printHand(g.PlayerHand.Cards), g.PlayerScore)
+		fmt.Printf("莊家牌: %s, 初始點數: %d\n", printHand(g.BankerHand.Cards), g.BankerScore)
+	}
 
 	// 補牌階段
 	if g.NeedThirdCard() {
-		fmt.Println("\n=== 補牌階段 ===")
+		if showLog {
+			fmt.Println("\n=== 補牌階段 ===")
+		}
 		initialPlayerCards := len(g.PlayerHand.Cards)
 		initialBankerCards := len(g.BankerHand.Cards)
 
 		g.DealThirdCard()
 
-		// 檢查閒家是否補牌
-		if len(g.PlayerHand.Cards) > initialPlayerCards {
-			fmt.Printf("閒家補牌: %s\n", printCard(g.PlayerHand.Cards[len(g.PlayerHand.Cards)-1]))
-			fmt.Printf("閒家最終點數: %d\n", g.PlayerScore)
-		} else {
-			fmt.Println("閒家不需要補牌")
-		}
+		if showLog {
+			// 檢查閒家是否補牌
+			if len(g.PlayerHand.Cards) > initialPlayerCards {
+				fmt.Printf("閒家補牌: %s\n", printCard(g.PlayerHand.Cards[len(g.PlayerHand.Cards)-1]))
+				fmt.Printf("閒家最終點數: %d\n", g.PlayerScore)
+			} else {
+				fmt.Println("閒家不需要補牌")
+			}
 
-		// 檢查莊家是否補牌
-		if len(g.BankerHand.Cards) > initialBankerCards {
-			fmt.Printf("莊家補牌: %s\n", printCard(g.BankerHand.Cards[len(g.BankerHand.Cards)-1]))
-			fmt.Printf("莊家最終點數: %d\n", g.BankerScore)
-		} else {
-			fmt.Println("莊家不需要補牌")
+			// 檢查莊家是否補牌
+			if len(g.BankerHand.Cards) > initialBankerCards {
+				fmt.Printf("莊家補牌: %s\n", printCard(g.BankerHand.Cards[len(g.BankerHand.Cards)-1]))
+				fmt.Printf("莊家最終點數: %d\n", g.BankerScore)
+			} else {
+				fmt.Println("莊家不需要補牌")
+			}
 		}
-	} else {
+	} else if showLog {
 		fmt.Println("\n莊閒皆不需要補牌")
 	}
 
 	// 判定勝負
 	g.DetermineWinner()
 
-	// 最終結果
-	fmt.Println("\n=== 最終結果 ===")
-	fmt.Printf("閒家最終牌: %s, 最終點數: %d\n", printHand(g.PlayerHand.Cards), g.PlayerScore)
-	fmt.Printf("莊家最終牌: %s, 最終點數: %d\n", printHand(g.BankerHand.Cards), g.BankerScore)
-	fmt.Printf("贏家: %s\n", getWinnerString(g.Winner))
+	if showLog {
+		// 最終結果
+		fmt.Println("\n=== 最終結果 ===")
+		fmt.Printf("閒家最終牌: %s, 最終點數: %d\n", printHand(g.PlayerHand.Cards), g.PlayerScore)
+		fmt.Printf("莊家最終牌: %s, 最終點數: %d\n", printHand(g.BankerHand.Cards), g.BankerScore)
+		fmt.Printf("贏家: %s\n", getWinnerString(g.Winner))
 
-	if g.IsLuckySix {
-		fmt.Println("\n🎉 恭喜！獲得幸運6！")
+		if g.IsLuckySix {
+			fmt.Println("\n🎉 恭喜！獲得幸運6！")
+		}
 	}
 
 	// 保存遊戲記錄到資料庫
 	if err := saveGame(g, gameID); err != nil {
 		log.Printf("Error saving game record: %v\n", err)
-	} else {
+	} else if showLog {
 		fmt.Printf("\n遊戲記錄已保存，遊戲ID: %s\n", gameID)
 	}
 }
@@ -184,13 +192,48 @@ func main() {
 		if err != nil {
 			log.Fatal("Invalid RUN_TIMES value:", err)
 		}
-		fmt.Printf("將執行 %d 次遊戲\n\n", times)
+
+		// 統計變數
+		bankerWins := 0
+		playerWins := 0
+		ties := 0
+		lucky6Count := 0
+
+		fmt.Printf("執行 %d 次遊戲中...\n", times)
 		for i := 1; i <= times; i++ {
-			fmt.Printf("\n=== 第 %d 局 ===\n", i)
-			playOneGame()
+			g := game.NewGame()
+			g.Play() // 直接使用 Play 方法來運行一局完整遊戲
+
+			// 統計結果
+			switch g.Winner {
+			case "Banker":
+				bankerWins++
+				if g.IsLuckySix {
+					lucky6Count++
+				}
+			case "Player":
+				playerWins++
+			case "Tie":
+				ties++
+			}
+
+			// 保存遊戲記錄
+			gameID := uuid.New().String()
+			if err := saveGame(g, gameID); err != nil {
+				log.Printf("Error saving game record: %v\n", err)
+			}
 		}
+
+		// 輸出統計結果
+		fmt.Printf("\n=== 遊戲統計 ===\n")
+		fmt.Printf("總局數: %d\n", times)
+		fmt.Printf("莊家贏: %d (%.2f%%)\n", bankerWins, float64(bankerWins)/float64(times)*100)
+		fmt.Printf("閒家贏: %d (%.2f%%)\n", playerWins, float64(playerWins)/float64(times)*100)
+		fmt.Printf("和局: %d (%.2f%%)\n", ties, float64(ties)/float64(times)*100)
+		fmt.Printf("幸運6: %d (%.2f%%)\n", lucky6Count, float64(lucky6Count)/float64(times)*100)
+		fmt.Printf("完成 %d 次遊戲\n", times)
 	} else {
-		// 互動模式
+		// 互動模式保持不變
 		fmt.Println("請輸入要執行的次數（直接按 Enter 執行一次）：")
 		var input string
 		fmt.Scanln(&input)
@@ -206,7 +249,7 @@ func main() {
 
 		for i := 1; i <= times; i++ {
 			fmt.Printf("\n=== 第 %d 局 ===\n", i)
-			playOneGame()
+			playOneGame(true) // 互動模式顯示日誌
 		}
 	}
 }
