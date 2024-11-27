@@ -7,13 +7,15 @@ type Hand struct {
 
 // Game 代表百家樂遊戲
 type Game struct {
-	Deck          *Deck
-	PlayerHand    Hand
-	BankerHand    Hand
-	PlayerScore   int
-	BankerScore   int
-	Winner        string
-	IsLuckySix    bool
+	Deck         *Deck
+	PlayerHand   Hand
+	BankerHand   Hand
+	PlayerScore  int
+	BankerScore  int
+	Winner       string
+	IsLuckySix   bool
+	LuckySixType string             // "2cards" 或 "3cards"
+	Payouts      map[string]float64 // 各種投注的賠率
 }
 
 // NewGame 創建新遊戲
@@ -21,21 +23,16 @@ func NewGame() *Game {
 	deck := NewDeck()
 	deck.Shuffle()
 	return &Game{
-		Deck: deck,
+		Deck:    deck,
+		Payouts: make(map[string]float64),
 	}
 }
 
 // Deal 發牌
 func (g *Game) Deal() {
-	// 發給閒家第一張牌
-	g.PlayerHand.Cards = append(g.PlayerHand.Cards, g.Deck.DrawCard())
-	// 發給莊家第一張牌
-	g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
-	// 發給閒家第二張牌
-	g.PlayerHand.Cards = append(g.PlayerHand.Cards, g.Deck.DrawCard())
-	// 發給莊家第二張牌
-	g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
-
+	// 初始發牌：閒家和莊家各發兩張牌
+	g.PlayerHand.Cards = []Card{g.Deck.DrawCard(), g.Deck.DrawCard()}
+	g.BankerHand.Cards = []Card{g.Deck.DrawCard(), g.Deck.DrawCard()}
 	g.calculateScores()
 }
 
@@ -110,15 +107,58 @@ func (g *Game) shouldBankerDrawThird(playerThirdValue int) bool {
 
 // DetermineWinner 判斷勝負
 func (g *Game) DetermineWinner() {
-	// 檢查幸運6
-	g.IsLuckySix = g.BankerScore == 6 && len(g.BankerHand.Cards) == 2
-
+	// 先判斷勝負
 	if g.PlayerScore > g.BankerScore {
 		g.Winner = "Player"
 	} else if g.BankerScore > g.PlayerScore {
 		g.Winner = "Banker"
 	} else {
 		g.Winner = "Tie"
+	}
+
+	// 再判斷幸運6（只有莊家贏且點數為6時才可能是幸運6）
+	if g.Winner == "Banker" && g.BankerScore == 6 {
+		g.IsLuckySix = true
+		if len(g.BankerHand.Cards) == 2 {
+			g.LuckySixType = "2cards"
+		} else {
+			g.LuckySixType = "3cards"
+		}
+	} else {
+		g.IsLuckySix = false
+		g.LuckySixType = ""
+	}
+
+	// 計算賠率
+	g.calculatePayouts()
+}
+
+// calculatePayouts 計算賠率
+func (g *Game) calculatePayouts() {
+	// 重置所有賠率
+	g.Payouts["Player"] = 0
+	g.Payouts["Banker"] = 0
+	g.Payouts["Tie"] = 0
+	g.Payouts["LuckySix"] = 0
+
+	// 根據遊戲結果設置賠率
+	switch g.Winner {
+	case "Player":
+		g.Payouts["Player"] = g.Payouts["PAYOUT_PLAYER"]
+	case "Banker":
+		if g.IsLuckySix {
+			if g.LuckySixType == "2cards" {
+				g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER_LUCKY6_2CARDS"]
+				g.Payouts["LuckySix"] = g.Payouts["PAYOUT_LUCKY6_2CARDS"]
+			} else {
+				g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER_LUCKY6_3CARDS"]
+				g.Payouts["LuckySix"] = g.Payouts["PAYOUT_LUCKY6_3CARDS"]
+			}
+		} else {
+			g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER"]
+		}
+	case "Tie":
+		g.Payouts["Tie"] = g.Payouts["PAYOUT_TIE"]
 	}
 }
 
