@@ -47,15 +47,15 @@ func loadPayouts() map[string]float64 {
 	payouts := make(map[string]float64)
 
 	// 基本賠率
-	payouts["PAYOUT_PLAYER"], _ = strconv.ParseFloat(os.Getenv("PAYOUT_PLAYER"), 64)
-	payouts["PAYOUT_BANKER"], _ = strconv.ParseFloat(os.Getenv("PAYOUT_BANKER"), 64)
-	payouts["PAYOUT_TIE"], _ = strconv.ParseFloat(os.Getenv("PAYOUT_TIE"), 64)
+	payouts["PAYOUT_PLAYER"], _ = strconv.ParseFloat(os.Getenv("PLAYER_PAYOUT"), 64)
+	payouts["PAYOUT_BANKER"], _ = strconv.ParseFloat(os.Getenv("BANKER_PAYOUT"), 64)
+	payouts["PAYOUT_TIE"], _ = strconv.ParseFloat(os.Getenv("TIE_PAYOUT"), 64)
 	
 	// 幸運6賠率
-	payouts["PAYOUT_LUCKY6_2CARDS"], _ = strconv.ParseFloat(os.Getenv("PAYOUT_LUCKY6_2CARDS"), 64)
-	payouts["PAYOUT_LUCKY6_3CARDS"], _ = strconv.ParseFloat(os.Getenv("PAYOUT_LUCKY6_3CARDS"), 64)
-	payouts["PAYOUT_BANKER_LUCKY6_2CARDS"], _ = strconv.ParseFloat(os.Getenv("PAYOUT_BANKER_LUCKY6_2CARDS"), 64)
-	payouts["PAYOUT_BANKER_LUCKY6_3CARDS"], _ = strconv.ParseFloat(os.Getenv("PAYOUT_BANKER_LUCKY6_3CARDS"), 64)
+	payouts["PAYOUT_LUCKY6_2CARDS"], _ = strconv.ParseFloat(os.Getenv("LUCKY6_2CARDS_PAYOUT"), 64)
+	payouts["PAYOUT_LUCKY6_3CARDS"], _ = strconv.ParseFloat(os.Getenv("LUCKY6_3CARDS_PAYOUT"), 64)
+	payouts["PAYOUT_BANKER_LUCKY6_2CARDS"], _ = strconv.ParseFloat(os.Getenv("BANKER_LUCKY6_2CARDS_PAYOUT"), 64)
+	payouts["PAYOUT_BANKER_LUCKY6_3CARDS"], _ = strconv.ParseFloat(os.Getenv("BANKER_LUCKY6_3CARDS_PAYOUT"), 64)
 
 	return payouts
 }
@@ -139,86 +139,59 @@ func playOneGame(showLog bool) {
 	// 生成遊戲ID
 	gameID := uuid.New().String()
 
-	// 創建新遊戲並設置賠率
-	g := game.NewGame()
+	// 加載環境變量
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 	payouts := loadPayouts()
-	for k, v := range payouts {
-		g.Payouts[k] = v
-	}
+	game := game.NewGame()
+	game.Payouts = payouts
+	game.Deal()
+	game.DealThirdCard() // 確保補牌邏輯被調用
+	game.DetermineWinner()
+	game.CalculatePayouts()
 
-	// 初始發牌
-	g.Deal()
 	if showLog {
+		// 初始發牌
 		fmt.Println("=== 初始發牌 ===")
-		fmt.Printf("閒家牌: %s, 初始點數: %d\n", printHand(g.PlayerHand.Cards), g.PlayerScore)
-		fmt.Printf("莊家牌: %s, 初始點數: %d\n", printHand(g.BankerHand.Cards), g.BankerScore)
-	}
+		fmt.Printf("閒家牌: %s, 初始點數: %d\n", printHand(game.PlayerHand.Cards), game.PlayerScore)
+		fmt.Printf("莊家牌: %s, 初始點數: %d\n", printHand(game.BankerHand.Cards), game.BankerScore)
 
-	// 補牌階段
-	if g.NeedThirdCard() {
-		if showLog {
-			fmt.Println("\n=== 補牌階段 ===")
-		}
-		initialPlayerCards := len(g.PlayerHand.Cards)
-		initialBankerCards := len(g.BankerHand.Cards)
-
-		g.DealThirdCard()
-
-		if showLog {
-			// 檢查閒家是否補牌
-			if len(g.PlayerHand.Cards) > initialPlayerCards {
-				fmt.Printf("閒家補牌: %s\n", printCard(g.PlayerHand.Cards[len(g.PlayerHand.Cards)-1]))
-				fmt.Printf("閒家最終點數: %d\n", g.PlayerScore)
-			} else {
-				fmt.Println("閒家不需要補牌")
-			}
-
-			// 檢查莊家是否補牌
-			if len(g.BankerHand.Cards) > initialBankerCards {
-				fmt.Printf("莊家補牌: %s\n", printCard(g.BankerHand.Cards[len(g.BankerHand.Cards)-1]))
-				fmt.Printf("莊家最終點數: %d\n", g.BankerScore)
-			} else {
-				fmt.Println("莊家不需要補牌")
-			}
-		}
-	} else if showLog {
-		fmt.Println("\n莊閒皆不需要補牌")
-	}
-
-	// 判定勝負
-	g.DetermineWinner()
-
-	if showLog {
-		// 最終結果
-		fmt.Println("\n=== 最終結果 ===")
-		fmt.Printf("閒家最終牌: %s, 最終點數: %d\n", printHand(g.PlayerHand.Cards), g.PlayerScore)
-		fmt.Printf("莊家最終牌: %s, 最終點數: %d\n", printHand(g.BankerHand.Cards), g.BankerScore)
-		fmt.Printf("贏家: %s\n", getWinnerString(g.Winner))
+		// 補牌階段
+		fmt.Println("\n=== 補牌階段 ===")
+		fmt.Printf("閒家牌: %s, 最終點數: %d\n", printHand(game.PlayerHand.Cards), game.PlayerScore)
+		fmt.Printf("莊家牌: %s, 最終點數: %d\n", printHand(game.BankerHand.Cards), game.BankerScore)
+		fmt.Printf("贏家: %s\n", getWinnerString(game.Winner))
 
 		// 顯示賠率信息
-		if g.IsLuckySix {
+		if game.IsLuckySix {
 			fmt.Printf("\n🎉 恭喜！獲得%s幸運6！\n", 
-				map[string]string{"2cards": "兩張牌", "3cards": "三張牌"}[g.LuckySixType])
+				map[string]string{"2cards": "兩張牌", "3cards": "三張牌"}[game.LuckySixType])
 		}
 
 		fmt.Println("\n=== 賠率信息 ===")
-		if g.Winner == "Banker" && g.IsLuckySix {
-			if g.LuckySixType == "2cards" {
-				fmt.Printf("幸運6賠率: %.2f:1\n", g.Payouts["PAYOUT_LUCKY6_2CARDS"])
-				fmt.Printf("莊家賠率: %.2f:1\n", g.Payouts["PAYOUT_BANKER_LUCKY6_2CARDS"])
+		if game.Winner == "Banker" && game.IsLuckySix {
+			if game.LuckySixType == "2cards" {
+				fmt.Printf("幸運6賠率: %.2f:1\n", game.Payouts["PAYOUT_LUCKY6_2CARDS"])
+				fmt.Printf("莊家賠率: %.2f:1\n", game.Payouts["PAYOUT_BANKER_LUCKY6_2CARDS"])
 			} else {
-				fmt.Printf("幸運6賠率: %.2f:1\n", g.Payouts["PAYOUT_LUCKY6_3CARDS"])
-				fmt.Printf("莊家賠率: %.2f:1\n", g.Payouts["PAYOUT_BANKER_LUCKY6_3CARDS"])
+				fmt.Printf("幸運6賠率: %.2f:1\n", game.Payouts["PAYOUT_LUCKY6_3CARDS"])
+				fmt.Printf("莊家賠率: %.2f:1\n", game.Payouts["PAYOUT_BANKER_LUCKY6_3CARDS"])
 			}
 		} else {
-			fmt.Printf("和局賠率: %.2f:1\n", g.Payouts["PAYOUT_TIE"])
-			fmt.Printf("閒家賠率: %.2f:1\n", g.Payouts["PAYOUT_PLAYER"])
-			fmt.Printf("莊家賠率: %.2f:1\n", g.Payouts["PAYOUT_BANKER"])
+			fmt.Printf("和局賠率: %.2f:1\n", game.Payouts["PAYOUT_TIE"])
+			fmt.Printf("閒家賠率: %.2f:1\n", game.Payouts["PAYOUT_PLAYER"])
+			fmt.Printf("莊家賠率: %.2f:1\n", game.Payouts["PAYOUT_BANKER"])
 		}
 	}
 
+	// 初始化數據庫連接
+	if err := db.InitDB(); err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
 	// 保存遊戲記錄到資料庫
-	if err := saveGame(g, gameID); err != nil {
+	if err := saveGame(game, gameID); err != nil {
 		log.Printf("Error saving game record: %v\n", err)
 	} else if showLog {
 		fmt.Printf("\n遊戲記錄已保存，遊戲ID: %s\n", gameID)
@@ -231,9 +204,9 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
-	// 初始化資料庫連接
+	// 初始化數據庫連接
 	if err := db.InitDB(); err != nil {
-		log.Fatal("Error initializing database:", err)
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
 	// 加載賠率設置
@@ -256,7 +229,10 @@ func main() {
 		for i := 1; i <= times; i++ {
 			g := game.NewGame()
 			g.Payouts = payouts // 設置賠率
-			g.Play() // 直接使用 Play 方法來運行一局完整遊戲
+			g.Deal()
+			g.DealThirdCard() // 確保補牌邏輯被調用
+			g.DetermineWinner()
+			g.CalculatePayouts()
 
 			// 統計結果
 			switch g.Winner {

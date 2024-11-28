@@ -130,16 +130,16 @@ func (g *Game) DetermineWinner() {
 	}
 
 	// 計算賠率
-	g.calculatePayouts()
+	g.CalculatePayouts()
 }
 
-// calculatePayouts 計算賠率
-func (g *Game) calculatePayouts() {
-	// 重置所有賠率
-	g.Payouts["Player"] = 0
-	g.Payouts["Banker"] = 0
-	g.Payouts["Tie"] = 0
-	g.Payouts["LuckySix"] = 0
+// CalculatePayouts 計算賠率
+func (g *Game) CalculatePayouts() {
+	// 確保賠率鍵名與數據庫一致
+	g.Payouts["Player"] = g.Payouts["PAYOUT_PLAYER"]
+	g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER"]
+	g.Payouts["Tie"] = g.Payouts["PAYOUT_TIE"]
+	g.Payouts["LuckySix"] = 0 // 初始化 LuckySix 賠率
 
 	// 根據遊戲結果設置賠率
 	switch g.Winner {
