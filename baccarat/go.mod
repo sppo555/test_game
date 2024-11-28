@@ -7,3 +7,8 @@ require (
 	github.com/google/uuid v1.3.1
 	github.com/joho/godotenv v1.5.1
 )
+
+require (
+	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
+	golang.org/x/crypto v0.29.0 // indirect
+)
