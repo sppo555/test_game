@@ -1,5 +1,9 @@
 package game
 
+import (
+    "baccarat/config"
+)
+
 // Hand 代表一手牌
 type Hand struct {
 	Cards []Card
@@ -135,31 +139,32 @@ func (g *Game) DetermineWinner() {
 
 // CalculatePayouts 計算賠率
 func (g *Game) CalculatePayouts() {
-	// 確保賠率鍵名與數據庫一致
-	g.Payouts["Player"] = g.Payouts["PAYOUT_PLAYER"]
-	g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER"]
-	g.Payouts["Tie"] = g.Payouts["PAYOUT_TIE"]
-	g.Payouts["LuckySix"] = 0 // 初始化 LuckySix 賠率
+    // 初始化賠率
+    g.Payouts = make(map[string]float64)
+    g.Payouts["Player"] = 0
+    g.Payouts["Banker"] = 0
+    g.Payouts["Tie"] = 0
+    g.Payouts["LuckySix"] = 0
 
-	// 根據遊戲結果設置賠率
-	switch g.Winner {
-	case "Player":
-		g.Payouts["Player"] = g.Payouts["PAYOUT_PLAYER"]
-	case "Banker":
-		if g.IsLuckySix {
-			if g.LuckySixType == "2cards" {
-				g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER_LUCKY6_2CARDS"]
-				g.Payouts["LuckySix"] = g.Payouts["PAYOUT_LUCKY6_2CARDS"]
-			} else {
-				g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER_LUCKY6_3CARDS"]
-				g.Payouts["LuckySix"] = g.Payouts["PAYOUT_LUCKY6_3CARDS"]
-			}
-		} else {
-			g.Payouts["Banker"] = g.Payouts["PAYOUT_BANKER"]
-		}
-	case "Tie":
-		g.Payouts["Tie"] = g.Payouts["PAYOUT_TIE"]
-	}
+    // 根據遊戲結果設置賠率
+    switch g.Winner {
+    case "Player":
+        g.Payouts["Player"] = config.AppConfig.PlayerPayout
+    case "Banker":
+        if g.IsLuckySix {
+            if g.LuckySixType == "2cards" {
+                g.Payouts["Banker"] = config.AppConfig.BankerLucky6_2Cards
+                g.Payouts["LuckySix"] = config.AppConfig.Lucky6_2CardsPayout
+            } else {
+                g.Payouts["Banker"] = config.AppConfig.BankerLucky6_3Cards
+                g.Payouts["LuckySix"] = config.AppConfig.Lucky6_3CardsPayout
+            }
+        } else {
+            g.Payouts["Banker"] = config.AppConfig.BankerPayout
+        }
+    case "Tie":
+        g.Payouts["Tie"] = config.AppConfig.TiePayout
+    }
 }
 
 // Play 進行一局遊戲
