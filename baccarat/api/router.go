@@ -13,6 +13,7 @@ type Router struct {
 	authHandler   *handlers.AuthHandler
 	userHandler   *handlers.UserHandler
 	gameHandler   *handlers.GameHandler
+	autoGameHandler *handlers.AutoGameHandler
 	authMiddleware *middleware.AuthMiddleware
 }
 
@@ -23,6 +24,7 @@ func NewRouter(db *sql.DB) *Router {
 		authHandler:   handlers.NewAuthHandler(db, jwtService),
 		userHandler:   handlers.NewUserHandler(db),
 		gameHandler:   handlers.NewGameHandler(db),
+		autoGameHandler: handlers.NewAutoGameHandler(db),
 		authMiddleware: middleware.NewAuthMiddleware(jwtService),
 	}
 	router.setupRoutes()
@@ -41,6 +43,10 @@ func (r *Router) setupRoutes() {
 	r.mux.Handle("/api/user/bets", r.authMiddleware.Authenticate(http.HandlerFunc(r.userHandler.GetBets)))
 	r.mux.Handle("/api/game/play", r.authMiddleware.Authenticate(http.HandlerFunc(r.gameHandler.PlayGame)))
 	r.mux.Handle("/api/logout", r.authMiddleware.Authenticate(http.HandlerFunc(r.authHandler.Logout)))
+
+	// 自動遊戲路由
+	r.mux.Handle("/api/auto-game/status", r.authMiddleware.Authenticate(http.HandlerFunc(r.autoGameHandler.GetAutoGameStatus)))
+	r.mux.Handle("/api/auto-game/bet", r.authMiddleware.Authenticate(http.HandlerFunc(r.autoGameHandler.PlaceAutoBet)))
 }
 
 // ServeHTTP implements the http.Handler interface
