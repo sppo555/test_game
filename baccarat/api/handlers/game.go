@@ -10,9 +10,10 @@ import (
 	"baccarat/pkg/validation"
 	"database/sql"
 	"encoding/json"
-	"github.com/google/uuid"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type GameHandler struct {
@@ -43,15 +44,22 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 
 	// 解析投注信息
 	var bets struct {
-		Player    float64 `json:"player"`
-		Banker    float64 `json:"banker"`
-		Tie       float64 `json:"tie"`
-		LuckySix  float64 `json:"luckySix"`
+		Player   float64 `json:"player"`
+		Banker   float64 `json:"banker"`
+		Tie      float64 `json:"tie"`
+		LuckySix float64 `json:"luckySix"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&bets); err != nil {
 		logger.Warn("Invalid bet data")
 		utils.ValidationError(w, "Invalid bet data")
+		return
+	}
+
+	// 檢查是否同時下注莊家和閒家
+	if bets.Player > 0 && bets.Banker > 0 {
+		logger.Warn("Cannot bet on both Player and Banker")
+		utils.ValidationError(w, "不能同時下注莊家和閒家")
 		return
 	}
 
@@ -195,10 +203,10 @@ func formatCard(card game.Card) string {
 
 // 計算賠付
 func calculatePayouts(g *game.Game, bets struct {
-	Player    float64 `json:"player"`
-	Banker    float64 `json:"banker"`
-	Tie       float64 `json:"tie"`
-	LuckySix  float64 `json:"luckySix"`
+	Player   float64 `json:"player"`
+	Banker   float64 `json:"banker"`
+	Tie      float64 `json:"tie"`
+	LuckySix float64 `json:"luckySix"`
 }) map[string]float64 {
 	payouts := make(map[string]float64)
 
@@ -209,7 +217,15 @@ func calculatePayouts(g *game.Game, bets struct {
 		}
 	case "Banker":
 		if bets.Banker > 0 {
-			payouts["banker"] = bets.Banker * config.AppConfig.BankerPayout
+			if g.IsLuckySix {
+				if g.LuckySixType == "2cards" {
+					payouts["banker"] = bets.Banker * config.AppConfig.BankerLucky6_2Cards
+				} else {
+					payouts["banker"] = bets.Banker * config.AppConfig.BankerLucky6_3Cards
+				}
+			} else {
+				payouts["banker"] = bets.Banker * config.AppConfig.BankerPayout
+			}
 		}
 	case "Tie":
 		if bets.Tie > 0 {
@@ -219,11 +235,11 @@ func calculatePayouts(g *game.Game, bets struct {
 
 	// 處理幸運6
 	if g.IsLuckySix && bets.LuckySix > 0 {
-		multiplier := 12.0 // 默認三張牌
 		if g.LuckySixType == "2cards" {
-			multiplier = 20.0 // 兩張牌
+			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_2CardsPayout
+		} else {
+			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_3CardsPayout
 		}
-		payouts["luckySix"] = bets.LuckySix * multiplier
 	}
 
 	return payouts
@@ -290,10 +306,10 @@ func formatCardsToString(cards []string) string {
 
 // 保存投注記錄
 func saveBets(tx *sql.Tx, userID int, gameID string, bets struct {
-	Player    float64 `json:"player"`
-	Banker    float64 `json:"banker"`
-	Tie       float64 `json:"tie"`
-	LuckySix  float64 `json:"luckySix"`
+	Player   float64 `json:"player"`
+	Banker   float64 `json:"banker"`
+	Tie      float64 `json:"tie"`
+	LuckySix float64 `json:"luckySix"`
 }) error {
 	// 保存每個投注
 	if bets.Player > 0 {
