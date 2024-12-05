@@ -24,14 +24,3 @@ CREATE TABLE IF NOT EXISTS game_records (
     INDEX idx_game_id (game_id),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- 詳細牌記錄表
-CREATE TABLE IF NOT EXISTS card_details (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    game_id VARCHAR(36) NOT NULL,
-    position VARCHAR(20) NOT NULL,
-    suit INT NOT NULL,
-    value INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (game_id) REFERENCES game_records(game_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

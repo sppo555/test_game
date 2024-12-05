@@ -136,15 +136,6 @@ func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string
 	})
 }
 
-// SaveCardDetail saves individual card details to database
-func SaveCardDetail(tx *sql.Tx, gameID string, position string, suit, value int) error {
-	_, err := tx.Exec(`
-		INSERT INTO card_details (game_id, position, suit, value)
-		VALUES (?, ?, ?, ?)
-	`, gameID, position, suit, value)
-	return err
-}
-
 // GetUserBalance 獲取用戶餘額
 func GetUserBalance(userID int) (float64, error) {
 	var balance float64

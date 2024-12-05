@@ -10,7 +10,6 @@ import (
 	"baccarat/pkg/validation"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -197,14 +196,14 @@ func formatCards(cards []game.Card) []string {
 
 // 格式化單張牌
 func formatCard(card game.Card) string {
-	suits := []string{"S", "H", "D", "C"}  // Spades, Hearts, Diamonds, Clubs
+	suits := []string{"S", "H", "D", "C"} // Spades, Hearts, Diamonds, Clubs
 	values := []string{"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"}
-	return suits[card.Suit] + values[card.Value-1]  // 例如：S7, CK
+	return suits[card.Suit] + values[card.Value-1] // 例如：S7, CK
 }
 
 // 格式化牌組為字符串
 func formatCardsToString(cards []string) string {
-	return strings.Join(cards, ",")  // 例如：S7,CK
+	return strings.Join(cards, ",") // 例如：S7,CK
 }
 
 // 計算賠付
@@ -319,33 +318,6 @@ func saveGameRecord(tx *sql.Tx, g *game.Game, gameID string, payouts map[string]
 		payouts,
 	); err != nil {
 		return err
-	}
-
-	// 保存詳細牌記錄
-	// 保存閒家初始牌
-	for i, card := range g.PlayerHand.Cards[:2] {
-		if err := db.SaveCardDetail(tx, gameID, fmt.Sprintf("player_%d", i+1), int(card.Suit), card.Value); err != nil {
-			return err
-		}
-	}
-	// 保存莊家初始牌
-	for i, card := range g.BankerHand.Cards[:2] {
-		if err := db.SaveCardDetail(tx, gameID, fmt.Sprintf("banker_%d", i+1), int(card.Suit), card.Value); err != nil {
-			return err
-		}
-	}
-	// 保存補牌（如果有）
-	if len(g.PlayerHand.Cards) > 2 {
-		card := g.PlayerHand.Cards[2]
-		if err := db.SaveCardDetail(tx, gameID, "player_3", int(card.Suit), card.Value); err != nil {
-			return err
-		}
-	}
-	if len(g.BankerHand.Cards) > 2 {
-		card := g.BankerHand.Cards[2]
-		if err := db.SaveCardDetail(tx, gameID, "banker_3", int(card.Suit), card.Value); err != nil {
-			return err
-		}
 	}
 
 	return nil
