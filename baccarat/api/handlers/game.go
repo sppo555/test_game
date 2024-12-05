@@ -216,6 +216,20 @@ func calculatePayouts(g *game.Game, bets struct {
 }) map[string]float64 {
 	payouts := make(map[string]float64)
 
+	// 記錄投注金額
+	if bets.Player > 0 {
+		payouts["player_bet"] = bets.Player
+	}
+	if bets.Banker > 0 {
+		payouts["banker_bet"] = bets.Banker
+	}
+	if bets.Tie > 0 {
+		payouts["tie_bet"] = bets.Tie
+	}
+	if bets.LuckySix > 0 {
+		payouts["luckySix_bet"] = bets.LuckySix
+	}
+
 	switch g.Winner {
 	case "Player":
 		if bets.Player > 0 {

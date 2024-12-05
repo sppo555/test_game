@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS game_records (
     banker_payout DECIMAL(10,2),                 -- 莊家賠率
     tie_payout DECIMAL(10,2),                    -- 和局賠率
     lucky_six_payout DECIMAL(10,2),              -- 幸運6賠率
+    total_bets DECIMAL(10,2) DEFAULT 0.00,       -- 總投注額
+    total_payouts DECIMAL(10,2) DEFAULT 0.00,    -- 總派彩額
     INDEX idx_game_id (game_id),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

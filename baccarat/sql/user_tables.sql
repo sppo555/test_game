@@ -1,3 +1,6 @@
+CREATE DATABASE IF NOT EXISTS baccarat_db;
+USE baccarat_db;
+
 -- 用戶表
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,

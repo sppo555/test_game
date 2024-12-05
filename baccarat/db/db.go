@@ -83,23 +83,44 @@ func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string
 				player_third_card, banker_third_card,
 				player_final_score, banker_final_score,
 				winner, is_lucky_six, lucky_six_type,
-				player_payout, banker_payout, tie_payout, lucky_six_payout
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				player_payout, banker_payout, tie_payout, lucky_six_payout,
+				total_bets, total_payouts
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 
 		var playerPayout, bankerPayout, tiePayout, luckySixPayout sql.NullFloat64
+		totalBets := 0.0
+		totalPayouts := 0.0
 
 		if p, ok := payouts["player"]; ok {
 			playerPayout = sql.NullFloat64{Float64: p, Valid: true}
+			totalPayouts += p
 		}
 		if p, ok := payouts["banker"]; ok {
 			bankerPayout = sql.NullFloat64{Float64: p, Valid: true}
+			totalPayouts += p
 		}
 		if p, ok := payouts["tie"]; ok {
 			tiePayout = sql.NullFloat64{Float64: p, Valid: true}
+			totalPayouts += p
 		}
 		if p, ok := payouts["luckySix"]; ok {
 			luckySixPayout = sql.NullFloat64{Float64: p, Valid: true}
+			totalPayouts += p
+		}
+
+		// 計算總投注額
+		if p, ok := payouts["player_bet"]; ok {
+			totalBets += p
+		}
+		if p, ok := payouts["banker_bet"]; ok {
+			totalBets += p
+		}
+		if p, ok := payouts["tie_bet"]; ok {
+			totalBets += p
+		}
+		if p, ok := payouts["luckySix_bet"]; ok {
+			totalBets += p
 		}
 
 		_, err := tx.Exec(query,
@@ -108,6 +129,7 @@ func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string
 			playerFinalScore, bankerFinalScore,
 			winner, isLuckySix, luckySixType,
 			playerPayout, bankerPayout, tiePayout, luckySixPayout,
+			totalBets, totalPayouts,
 		)
 
 		return err
