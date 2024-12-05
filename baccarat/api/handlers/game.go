@@ -26,7 +26,7 @@ func NewGameHandler(db *sql.DB) *GameHandler {
 	}
 }
 
-// PlayGame 進行一局遊戲
+// PlayGame 進行遊戲
 func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		utils.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -48,6 +48,7 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 		Banker   float64 `json:"banker"`
 		Tie      float64 `json:"tie"`
 		LuckySix float64 `json:"luckySix"`
+		RunTimes int     `json:"runTimes"` // 新增：運行次數
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&bets); err != nil {
@@ -93,13 +94,22 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 計算總投注額
+	// 計算單次投注總額
 	totalBet := bets.Player + bets.Banker + bets.Tie + bets.LuckySix
 	if totalBet <= 0 {
 		logger.Warn("No bets placed for user", userID)
 		utils.ValidationError(w, "No bets placed")
 		return
 	}
+
+	// 設置運行次數，如果沒有指定則默認為1次
+	runTimes := bets.RunTimes
+	if runTimes <= 0 {
+		runTimes = 1
+	}
+
+	// 計算總需要的金額
+	totalRequiredBalance := totalBet * float64(runTimes)
 
 	// 檢查用戶餘額
 	balance, err := db.GetUserBalance(userID)
@@ -109,79 +119,126 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if balance < totalBet {
+	if balance < totalRequiredBalance {
 		logger.Warn("Insufficient balance for user", userID)
-		utils.ValidationError(w, "Insufficient balance")
+		utils.ValidationError(w, "Insufficient balance for all rounds")
 		return
 	}
 
-	// 定義遊戲相關變量
-	var (
-		gameID      string
-		g           *game.Game
-		totalPayout float64
-		payouts     map[string]float64
-	)
+	// 執行遊戲
+	var gameResults []map[string]interface{}
+	var totalWin float64
+	var totalLoss float64
 
-	// 開始事務
-	err = db.Transaction(func(tx *sql.Tx) error {
-		// 扣除投注金額
-		if err := db.UpdateUserBalance(tx, userID, -totalBet); err != nil {
-			return err
-		}
+	// 創建不包含 RunTimes 的投注結構
+	gameBets := struct {
+		Player   float64 `json:"player"`
+		Banker   float64 `json:"banker"`
+		Tie      float64 `json:"tie"`
+		LuckySix float64 `json:"luckySix"`
+	}{
+		Player:   bets.Player,
+		Banker:   bets.Banker,
+		Tie:      bets.Tie,
+		LuckySix: bets.LuckySix,
+	}
 
-		// 進行遊戲
-		gameID = uuid.New().String()
-		g = game.NewGame()
-		g.Deal()
-		g.DealThirdCard()
-		g.DetermineWinner()
+	for i := 0; i < runTimes; i++ {
+		// 定義遊戲相關變量
+		var (
+			gameID      string
+			g           *game.Game
+			totalPayout float64
+			payouts     map[string]float64
+		)
 
-		// 計算賠付
-		payouts = calculatePayouts(g, bets)
-		totalPayout = calculateTotalPayout(payouts)
-
-		// 更新用戶餘額（加上賠付金額）
-		if totalPayout > 0 {
-			if err := db.UpdateUserBalance(tx, userID, totalPayout); err != nil {
+		// 開始事務
+		err = db.Transaction(func(tx *sql.Tx) error {
+			// 扣除投注金額
+			if err := db.UpdateUserBalance(tx, userID, -totalBet); err != nil {
 				return err
 			}
+
+			// 進行遊戲
+			gameID = uuid.New().String()
+			g = game.NewGame()
+			g.Deal()
+			g.DealThirdCard()
+			g.DetermineWinner()
+
+			// 計算賠付
+			payouts = calculatePayouts(g, gameBets)
+			totalPayout = calculateTotalPayout(payouts)
+
+			// 更新用戶餘額（加上賠付金額）
+			// 如果玩家輸了，totalPayout 會是 0，這樣就只會扣除投注金額
+			// 如果玩家贏了，totalPayout 會包含本金和獎金，這樣就會返還本金並加上獎金
+			if totalPayout > 0 {
+				if err := db.UpdateUserBalance(tx, userID, totalPayout); err != nil {
+					return err
+				}
+			}
+
+			// 保存遊戲記錄
+			if err := saveGameRecord(tx, g, gameID, payouts); err != nil {
+				return err
+			}
+
+			// 保存投注記錄
+			if err := saveBets(tx, userID, gameID, gameBets); err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			logger.Error("Error processing game for user", userID, "Error:", err)
+			utils.ServerError(w, "Error processing game")
+			return
 		}
 
-		// 保存遊戲記錄
-		if err := saveGameRecord(tx, g, gameID, payouts); err != nil {
-			return err
+		// 計算輸贏
+		// 如果 totalPayout 為 0，表示完全輸掉投注金額
+		// 如果 totalPayout > totalBet，表示贏錢
+		// 如果 totalPayout == totalBet，表示打平
+		roundProfit := totalPayout - totalBet
+		if roundProfit > 0 {
+			totalWin += roundProfit
+		} else {
+			totalLoss += -roundProfit
 		}
 
-		// 保存投注記錄
-		if err := saveBets(tx, userID, gameID, bets); err != nil {
-			return err
+		// 記錄本局結果
+		gameResult := map[string]interface{}{
+			"gameId":        gameID,
+			"playerCards":   formatCards(g.PlayerHand.Cards),
+			"bankerCards":   formatCards(g.BankerHand.Cards),
+			"playerScore":   g.PlayerScore,
+			"bankerScore":   g.BankerScore,
+			"winner":        g.Winner,
+			"isLuckySix":    g.IsLuckySix,
+			"luckySixType":  g.LuckySixType,
+			"totalPayout":   totalPayout,
+			"payoutDetails": payouts,
+			"profit":        roundProfit,
+			"betAmount":     totalBet,    // 添加投注金額
+			"netBalance":    totalPayout, // 添加實際支付金額
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		logger.Error("Error processing game for user", userID, "Error:", err)
-		utils.ServerError(w, "Error processing game")
-		return
+		gameResults = append(gameResults, gameResult)
 	}
 
-	// 返回遊戲結果
+	// 返回總體結果
 	response := map[string]interface{}{
-		"gameId":        gameID,
-		"playerCards":   formatCards(g.PlayerHand.Cards),
-		"bankerCards":   formatCards(g.BankerHand.Cards),
-		"playerScore":   g.PlayerScore,
-		"bankerScore":   g.BankerScore,
-		"winner":        g.Winner,
-		"isLuckySix":    g.IsLuckySix,
-		"luckySixType":  g.LuckySixType,
-		"totalPayout":   totalPayout,
-		"payoutDetails": payouts,
+		"totalRounds": runTimes,
+		"totalBet":    totalRequiredBalance,
+		"totalWin":    totalWin,
+		"totalLoss":   totalLoss,
+		"netProfit":   totalWin - totalLoss,
+		"gameResults": gameResults,
 	}
 
-	logger.Info("Successfully processed game for user", userID, "GameID:", gameID)
+	logger.Info("Successfully processed", runTimes, "games for user", userID)
 	utils.SuccessResponse(w, response)
 }
 
@@ -215,49 +272,49 @@ func calculatePayouts(g *game.Game, bets struct {
 }) map[string]float64 {
 	payouts := make(map[string]float64)
 
-	// 記錄投注金額
-	if bets.Player > 0 {
-		payouts["player_bet"] = bets.Player
-	}
-	if bets.Banker > 0 {
-		payouts["banker_bet"] = bets.Banker
-	}
-	if bets.Tie > 0 {
-		payouts["tie_bet"] = bets.Tie
-	}
-	if bets.LuckySix > 0 {
-		payouts["luckySix_bet"] = bets.LuckySix
-	}
-
 	switch g.Winner {
 	case "Player":
 		if bets.Player > 0 {
-			payouts["player"] = bets.Player * config.AppConfig.PlayerPayout
+			// 玩家贏了，返還本金和獎金
+			payouts["player"] = bets.Player * (1 + config.AppConfig.PlayerPayout)
 		}
 	case "Banker":
 		if bets.Banker > 0 {
 			if g.IsLuckySix {
 				if g.LuckySixType == "2cards" {
-					payouts["banker"] = bets.Banker * config.AppConfig.BankerLucky6_2Cards
+					// 莊家贏了且是幸運6（2張牌），返還本金和獎金
+					payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerLucky6_2Cards)
 				} else {
-					payouts["banker"] = bets.Banker * config.AppConfig.BankerLucky6_3Cards
+					// 莊家贏了且是幸運6（3張牌），返還本金和獎金
+					payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerLucky6_3Cards)
 				}
 			} else {
-				payouts["banker"] = bets.Banker * config.AppConfig.BankerPayout
+				// 莊家贏了，返還本金和獎金
+				payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerPayout)
 			}
 		}
 	case "Tie":
 		if bets.Tie > 0 {
-			payouts["tie"] = bets.Tie * config.AppConfig.TiePayout
+			// 和局，返還本金和獎金
+			payouts["tie"] = bets.Tie * (1 + config.AppConfig.TiePayout)
+		}
+		// 和局時，只返還莊閒投注本金
+		if bets.Player > 0 {
+			payouts["player_return"] = bets.Player
+		}
+		if bets.Banker > 0 {
+			payouts["banker_return"] = bets.Banker
 		}
 	}
 
 	// 處理幸運6
 	if g.IsLuckySix && bets.LuckySix > 0 {
 		if g.LuckySixType == "2cards" {
-			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_2CardsPayout
+			// 幸運6（2張牌），返還本金和獎金
+			payouts["luckySix"] = bets.LuckySix * (1 + config.AppConfig.Lucky6_2CardsPayout)
 		} else {
-			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_3CardsPayout
+			// 幸運6（3張牌），返還本金和獎金
+			payouts["luckySix"] = bets.LuckySix * (1 + config.AppConfig.Lucky6_3CardsPayout)
 		}
 	}
 
