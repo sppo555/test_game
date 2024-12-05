@@ -5,6 +5,7 @@ import (
 	"baccarat/pkg/logger"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -13,12 +14,14 @@ var DB *sql.DB
 
 // InitDB initializes the database connection
 func InitDB() error {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	timezone := strings.Replace(config.AppConfig.DBTimezone, "/", "%2F", -1)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=%s",
 		config.AppConfig.DBUser,
 		config.AppConfig.DBPassword,
 		config.AppConfig.DBHost,
 		config.AppConfig.DBPort,
 		config.AppConfig.DBName,
+		timezone,
 	)
 
 	logger.Debug("Attempting to connect to database with DSN:", dsn)
