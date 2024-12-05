@@ -3,15 +3,21 @@ package handlers
 import (
 	"baccarat/api/middleware"
 	"baccarat/db"
+	"baccarat/pkg/logger"
 	"baccarat/pkg/utils"
 	"baccarat/pkg/validation"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 )
 
 type UserHandler struct {
 	db *sql.DB
+}
+
+type DepositRequest struct {
+	Amount string `json:"amount"`
 }
 
 func NewUserHandler(db *sql.DB) *UserHandler {
@@ -24,41 +30,56 @@ func NewUserHandler(db *sql.DB) *UserHandler {
 func (h *UserHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r)
 	if !ok {
+		logger.Warn("Unauthorized access to GetBalance")
 		utils.UnauthorizedError(w)
 		return
 	}
 
+	logger.Debug("Retrieving balance for user", userID)
 	balance, err := db.GetUserBalance(userID)
 	if err != nil {
+		logger.Error("Error retrieving balance for user", userID, "Error:", err)
 		utils.ServerError(w, "Error retrieving balance")
 		return
 	}
 
+	logger.Info("Successfully retrieved balance for user", userID)
 	utils.SuccessResponse(w, map[string]float64{"balance": balance})
 }
 
 // Deposit 處理用戶存款
 func (h *UserHandler) Deposit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		logger.Warn("Invalid method for Deposit:", r.Method)
 		utils.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	userID, ok := middleware.GetUserID(r)
 	if !ok {
+		logger.Warn("Unauthorized access to Deposit")
 		utils.UnauthorizedError(w)
 		return
 	}
 
-	amountStr := r.FormValue("amount")
-	amount, err := strconv.ParseFloat(amountStr, 64)
+	var req DepositRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.Warn("Invalid request body for Deposit:", err)
+		utils.ValidationError(w, "Invalid request format")
+		return
+	}
+	defer r.Body.Close()
+
+	amount, err := strconv.ParseFloat(req.Amount, 64)
 	if err != nil {
+		logger.Warn("Invalid amount format for Deposit:", req.Amount)
 		utils.ValidationError(w, "Invalid amount format")
 		return
 	}
 
 	// 驗證存款金額
 	if err := validation.ValidateAmount(amount); err != nil {
+		logger.Warn("Invalid amount for Deposit:", amount, "Error:", err)
 		utils.ValidationError(w, err.Error())
 		return
 	}
@@ -79,10 +100,12 @@ func (h *UserHandler) Deposit(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		logger.Error("Error processing deposit for user", userID, "Error:", err)
 		utils.ServerError(w, "Error processing deposit")
 		return
 	}
 
+	logger.Info("Successfully processed deposit for user", userID)
 	utils.SuccessResponse(w, map[string]interface{}{
 		"message": "Deposit successful",
 		"amount":  amount,
@@ -93,6 +116,7 @@ func (h *UserHandler) Deposit(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r)
 	if !ok {
+		logger.Warn("Unauthorized access to GetTransactions")
 		utils.UnauthorizedError(w)
 		return
 	}
@@ -122,6 +146,7 @@ func (h *UserHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
 		LIMIT ? OFFSET ?`, 
 		userID, pageSize, offset)
 	if err != nil {
+		logger.Error("Error retrieving transactions for user", userID, "Error:", err)
 		utils.ServerError(w, "Error retrieving transactions")
 		return
 	}
@@ -132,6 +157,7 @@ func (h *UserHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
 		var amount float64
 		var transactionType, createdAt string
 		if err := rows.Scan(&amount, &transactionType, &createdAt); err != nil {
+			logger.Error("Error scanning transaction for user", userID, "Error:", err)
 			utils.ServerError(w, "Error scanning transaction")
 			return
 		}
@@ -142,6 +168,7 @@ func (h *UserHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	logger.Info("Successfully retrieved transactions for user", userID)
 	utils.SuccessResponse(w, map[string]interface{}{
 		"page":         page,
 		"pageSize":     pageSize,
@@ -153,6 +180,7 @@ func (h *UserHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) GetBets(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r)
 	if !ok {
+		logger.Warn("Unauthorized access to GetBets")
 		utils.UnauthorizedError(w)
 		return
 	}
@@ -184,6 +212,7 @@ func (h *UserHandler) GetBets(w http.ResponseWriter, r *http.Request) {
 		LIMIT ? OFFSET ?`, 
 		userID, pageSize, offset)
 	if err != nil {
+		logger.Error("Error retrieving bets for user", userID, "Error:", err)
 		utils.ServerError(w, "Error retrieving bets")
 		return
 	}
@@ -198,6 +227,7 @@ func (h *UserHandler) GetBets(w http.ResponseWriter, r *http.Request) {
 
 		if err := rows.Scan(&gameID, &betAmount, &betType, &createdAt,
 			&winner, &isLuckySix, &luckySixType); err != nil {
+			logger.Error("Error scanning bet for user", userID, "Error:", err)
 			utils.ServerError(w, "Error scanning bet")
 			return
 		}
@@ -220,6 +250,7 @@ func (h *UserHandler) GetBets(w http.ResponseWriter, r *http.Request) {
 		bets = append(bets, bet)
 	}
 
+	logger.Info("Successfully retrieved bets for user", userID)
 	utils.SuccessResponse(w, map[string]interface{}{
 		"page":     page,
 		"pageSize": pageSize,

@@ -5,6 +5,7 @@ import (
 	"baccarat/config"
 	"baccarat/db"
 	"baccarat/internal/game"
+	"baccarat/pkg/logger"
 	"baccarat/pkg/utils"
 	"baccarat/pkg/validation"
 	"database/sql"
@@ -33,9 +34,12 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := middleware.GetUserID(r)
 	if !ok {
+		logger.Warn("Unauthorized access to PlayGame")
 		utils.UnauthorizedError(w)
 		return
 	}
+
+	logger.Debug("Starting game for user", userID)
 
 	// 解析投注信息
 	var bets struct {
@@ -46,6 +50,7 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&bets); err != nil {
+		logger.Warn("Invalid bet data")
 		utils.ValidationError(w, "Invalid bet data")
 		return
 	}
@@ -53,24 +58,28 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 	// 驗證每個投注金額
 	if bets.Player > 0 {
 		if err := validation.ValidateAmount(bets.Player); err != nil {
+			logger.Warn("Invalid player bet for user", userID, "Error:", err)
 			utils.ValidationError(w, "Invalid player bet: "+err.Error())
 			return
 		}
 	}
 	if bets.Banker > 0 {
 		if err := validation.ValidateAmount(bets.Banker); err != nil {
+			logger.Warn("Invalid banker bet for user", userID, "Error:", err)
 			utils.ValidationError(w, "Invalid banker bet: "+err.Error())
 			return
 		}
 	}
 	if bets.Tie > 0 {
 		if err := validation.ValidateAmount(bets.Tie); err != nil {
+			logger.Warn("Invalid tie bet for user", userID, "Error:", err)
 			utils.ValidationError(w, "Invalid tie bet: "+err.Error())
 			return
 		}
 	}
 	if bets.LuckySix > 0 {
 		if err := validation.ValidateAmount(bets.LuckySix); err != nil {
+			logger.Warn("Invalid lucky six bet for user", userID, "Error:", err)
 			utils.ValidationError(w, "Invalid lucky six bet: "+err.Error())
 			return
 		}
@@ -79,6 +88,7 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 	// 計算總投注額
 	totalBet := bets.Player + bets.Banker + bets.Tie + bets.LuckySix
 	if totalBet <= 0 {
+		logger.Warn("No bets placed for user", userID)
 		utils.ValidationError(w, "No bets placed")
 		return
 	}
@@ -86,11 +96,13 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 	// 檢查用戶餘額
 	balance, err := db.GetUserBalance(userID)
 	if err != nil {
+		logger.Error("Error checking balance for user", userID, "Error:", err)
 		utils.ServerError(w, "Error checking balance")
 		return
 	}
 
 	if balance < totalBet {
+		logger.Warn("Insufficient balance for user", userID)
 		utils.ValidationError(w, "Insufficient balance")
 		return
 	}
@@ -142,6 +154,7 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		logger.Error("Error processing game for user", userID, "Error:", err)
 		utils.ServerError(w, "Error processing game")
 		return
 	}
@@ -160,6 +173,7 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 		"payoutDetails": payouts,
 	}
 
+	logger.Info("Successfully processed game for user", userID, "GameID:", gameID)
 	utils.SuccessResponse(w, response)
 }
 

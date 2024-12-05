@@ -2,6 +2,7 @@ package db
 
 import (
 	"baccarat/config"
+	"baccarat/pkg/logger"
 	"database/sql"
 	"fmt"
 
@@ -20,15 +21,23 @@ func InitDB() error {
 		config.AppConfig.DBName,
 	)
 
+	logger.Debug("Attempting to connect to database with DSN:", dsn)
+
 	var err error
 	DB, err = sql.Open("mysql", dsn)
 	if err != nil {
+		logger.Error("Error opening database:", err)
 		return fmt.Errorf("error opening database: %v", err)
 	}
 
+	logger.Debug("Database connection opened successfully")
+
 	if err = DB.Ping(); err != nil {
+		logger.Error("Error pinging database:", err)
 		return fmt.Errorf("error connecting to the database: %v", err)
 	}
+
+	logger.Info("Successfully connected to database")
 
 	// 設置連接池參數
 	DB.SetMaxOpenConns(25)
