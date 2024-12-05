@@ -90,16 +90,6 @@ func (g *Game) DealThirdCard() {
 }
 
 func (g *Game) DetermineWinner() {
-	// 檢查幸運6
-	if g.BankerScore == 6 {
-		g.IsLuckySix = true
-		if len(g.BankerHand.Cards) == 2 {
-			g.LuckySixType = "2cards"
-		} else {
-			g.LuckySixType = "3cards"
-		}
-	}
-
 	// 決定贏家
 	if g.PlayerScore == g.BankerScore {
 		g.Winner = "Tie"
@@ -107,6 +97,15 @@ func (g *Game) DetermineWinner() {
 		g.Winner = "Player"
 	} else {
 		g.Winner = "Banker"
+		// 檢查幸運6：莊家6點且贏得遊戲（不是和局）
+		if g.BankerScore == 6 {
+			g.IsLuckySix = true
+			if len(g.BankerHand.Cards) == 2 {
+				g.LuckySixType = "2cards"
+			} else {
+				g.LuckySixType = "3cards"
+			}
+		}
 	}
 }
 
