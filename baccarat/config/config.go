@@ -14,6 +14,7 @@ type Config struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
+	TimeZone   string // 添加時區配置
 
 	// 日志配置
 	LogLevel string
@@ -47,6 +48,7 @@ func LoadConfig() error {
 		DBUser:     os.Getenv("DB_USER"),
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
+		TimeZone:   os.Getenv("TIME_ZONE"), // 添加時區配置
 
 		// 日志配置
 		LogLevel:   os.Getenv("LOG_LEVEL"),
