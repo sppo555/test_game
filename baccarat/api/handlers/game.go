@@ -169,16 +169,37 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 
 	// 返回遊戲結果
 	response := map[string]interface{}{
-		"gameId":        gameID,
-		"playerCards":   formatCards(g.PlayerHand.Cards),
-		"bankerCards":   formatCards(g.BankerHand.Cards),
-		"playerScore":   g.PlayerScore,
-		"bankerScore":   g.BankerScore,
-		"winner":        g.Winner,
-		"isLuckySix":    g.IsLuckySix,
-		"luckySixType":  g.LuckySixType,
-		"totalPayout":   totalPayout,
-		"payoutDetails": payouts,
+		"gameId":      gameID,
+		"playerCards": formatCards(g.PlayerHand.Cards),
+		"bankerCards": formatCards(g.BankerHand.Cards),
+		"playerScore": g.PlayerScore,
+		"bankerScore": g.BankerScore,
+		"winner":      g.Winner,
+		"isLuckySix":  g.IsLuckySix,
+		"luckySixType": g.LuckySixType,
+		// 下注明細
+		"bets": map[string]float64{
+			"player":   bets.Player,
+			"banker":   bets.Banker,
+			"tie":      bets.Tie,
+			"luckySix": bets.LuckySix,
+		},
+		// 賠付明細（不含本金）
+		"payouts": map[string]float64{
+			"player":   payouts["player"],
+			"banker":   payouts["banker"],
+			"tie":      payouts["tie"],
+			"luckySix": payouts["luckySix"],
+		},
+		// 本金返還明細
+		"principalReturns": map[string]float64{
+			"player":   payouts["player_principal"],
+			"banker":   payouts["banker_principal"],
+			"tie":      payouts["tie_principal"],
+			"luckySix": payouts["luckySix_principal"],
+		},
+		"totalBet":    totalBet,
+		"totalPayout": totalPayout,
 	}
 
 	logger.Info("Successfully processed game for user", userID, "GameID:", gameID)
@@ -229,34 +250,50 @@ func calculatePayouts(g *game.Game, bets struct {
 		payouts["luckySix_bet"] = bets.LuckySix
 	}
 
+	// 初始化本金返還（預設為0）
+	payouts["player_principal"] = 0
+	payouts["banker_principal"] = 0
+	payouts["tie_principal"] = 0
+	payouts["luckySix_principal"] = 0
+
 	switch g.Winner {
 	case "Player":
 		if bets.Player > 0 {
-			payouts["player"] = bets.Player * config.AppConfig.PlayerPayout
+			// 贏家賠付已包含本金
+			payouts["player"] = bets.Player * (1 + config.AppConfig.PlayerPayout)
 		}
 	case "Banker":
 		if bets.Banker > 0 {
 			if g.IsLuckySix {
 				if g.LuckySixType == "2cards" {
-					payouts["banker"] = bets.Banker * config.AppConfig.BankerLucky6_2Cards
+					// 幸運6時莊家賠付0.5倍
+					payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerLucky6_2Cards)
 				} else {
-					payouts["banker"] = bets.Banker * config.AppConfig.BankerLucky6_3Cards
+					// 幸運6時莊家賠付0.95倍
+					payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerLucky6_3Cards)
 				}
 			} else {
-				payouts["banker"] = bets.Banker * config.AppConfig.BankerPayout
+				payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerPayout)
 			}
 		}
 	case "Tie":
 		if bets.Tie > 0 {
+			// 和局贏家賠付不包含本金
 			payouts["tie"] = bets.Tie * config.AppConfig.TiePayout
 		}
+		// 和局時，只有莊閒和幸運6需要返還本金，和局贏家不需要返還本金
+		payouts["player_principal"] = bets.Player
+		payouts["banker_principal"] = bets.Banker
+		payouts["luckySix_principal"] = bets.LuckySix
 	}
 
 	// 處理幸運6
 	if g.IsLuckySix && bets.LuckySix > 0 {
 		if g.LuckySixType == "2cards" {
+			// 幸運6賠付已包含本金，兩張牌12倍
 			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_2CardsPayout
 		} else {
+			// 幸運6賠付已包含本金，三張牌20倍
 			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_3CardsPayout
 		}
 	}
@@ -267,9 +304,32 @@ func calculatePayouts(g *game.Game, bets struct {
 // 計算總賠付
 func calculateTotalPayout(payouts map[string]float64) float64 {
 	total := 0.0
-	for _, amount := range payouts {
+
+	// 計算賠付（已包含本金）
+	if amount, ok := payouts["player"]; ok {
 		total += amount
 	}
+	if amount, ok := payouts["banker"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["tie"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["luckySix"]; ok {
+		total += amount
+	}
+
+	// 和局時的本金返還
+	if amount, ok := payouts["player_principal"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["banker_principal"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["luckySix_principal"]; ok {
+		total += amount
+	}
+
 	return total
 }
 

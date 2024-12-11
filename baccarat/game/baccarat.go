@@ -139,19 +139,24 @@ func (g *Game) DetermineWinner() {
 
 // CalculatePayouts 計算賠率
 func (g *Game) CalculatePayouts() {
-    // 初始化賠率
+    // 初始化賠率，所有賠率預設為0（表示輸掉全部押注）
     g.Payouts = make(map[string]float64)
-    g.Payouts["Player"] = 0
-    g.Payouts["Banker"] = 0
-    g.Payouts["Tie"] = 0
-    g.Payouts["LuckySix"] = 0
+    g.Payouts["Player"] = 0    // 閒家賠率（不含本金）
+    g.Payouts["Banker"] = 0    // 莊家賠率（不含本金）
+    g.Payouts["Tie"] = 0       // 和局賠率（不含本金）
+    g.Payouts["LuckySix"] = 0  // 幸運6賠率（不含本金）
 
     // 根據遊戲結果設置賠率
     switch g.Winner {
     case "Player":
+        // 閒家贏，只有押閒家的會贏錢，其他全輸
         g.Payouts["Player"] = config.AppConfig.PlayerPayout
+        // 其他投注保持為0，表示輸掉全部押注
+        
     case "Banker":
+        // 莊家贏
         if g.IsLuckySix {
+            // 如果是幸運6，莊家和幸運6都贏
             if g.LuckySixType == "2cards" {
                 g.Payouts["Banker"] = config.AppConfig.BankerLucky6_2Cards
                 g.Payouts["LuckySix"] = config.AppConfig.Lucky6_2CardsPayout
@@ -160,10 +165,17 @@ func (g *Game) CalculatePayouts() {
                 g.Payouts["LuckySix"] = config.AppConfig.Lucky6_3CardsPayout
             }
         } else {
+            // 普通莊家贏
             g.Payouts["Banker"] = config.AppConfig.BankerPayout
         }
+        // 其他投注保持為0，表示輸掉全部押注
+        
     case "Tie":
-        g.Payouts["Tie"] = config.AppConfig.TiePayout
+        // 和局情況
+        g.Payouts["Tie"] = config.AppConfig.TiePayout  // 和局的賠率
+        g.Payouts["Player"] = 1.0  // 閒家押注返回本金（不輸不贏）
+        g.Payouts["Banker"] = 1.0  // 莊家押注返回本金（不輸不贏）
+        g.Payouts["LuckySix"] = 1.0  // 幸運6押注也返回本金（因為不是莊家贏，所以不輸不贏）
     }
 }
 
