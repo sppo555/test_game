@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -44,10 +45,11 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 
 	// 解析投注信息
 	var bets struct {
-		Player   float64 `json:"player"`
-		Banker   float64 `json:"banker"`
-		Tie      float64 `json:"tie"`
-		LuckySix float64 `json:"luckySix"`
+		Player    float64 `json:"player"`
+		Banker    float64 `json:"banker"`
+		Tie       float64 `json:"tie"`
+		LuckySix  float64 `json:"luckySix"`
+		RUN_TIMES string  `json:"RUN_TIMES"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&bets); err != nil {
@@ -101,7 +103,19 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 檢查用戶餘額
+	// 設置運行次數，默認為1次
+	runTimes := 1
+	if bets.RUN_TIMES != "" {
+		var err error
+		runTimes, err = strconv.Atoi(bets.RUN_TIMES)
+		if err != nil || runTimes <= 0 {
+			logger.Warn("Invalid RUN_TIMES value for user", userID)
+			utils.ValidationError(w, "Invalid RUN_TIMES value")
+			return
+		}
+	}
+
+	// 檢查用戶餘額是否足夠支付所有運行次數的投注
 	balance, err := db.GetUserBalance(userID)
 	if err != nil {
 		logger.Error("Error checking balance for user", userID, "Error:", err)
@@ -109,101 +123,111 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if balance < totalBet {
+	if balance < totalBet*float64(runTimes) {
 		logger.Warn("Insufficient balance for user", userID)
-		utils.ValidationError(w, "Insufficient balance")
+		utils.ValidationError(w, "Insufficient balance for all runs")
 		return
 	}
 
-	// 定義遊戲相關變量
-	var (
-		gameID      string
-		g           *game.Game
-		totalPayout float64
-		payouts     map[string]float64
-	)
+	// 存儲所有遊戲結果
+	var allGameResults []map[string]interface{}
 
-	// 開始事務
-	err = db.Transaction(func(tx *sql.Tx) error {
-		// 扣除投注金額
-		if err := db.UpdateUserBalance(tx, userID, -totalBet); err != nil {
-			return err
-		}
+	// 循環執行指定次數的遊戲
+	for i := 0; i < runTimes; i++ {
+		// 定義遊戲相關變量
+		var (
+			gameID      string
+			g           *game.Game
+			totalPayout float64
+			payouts     map[string]float64
+		)
 
-		// 進行遊戲
-		gameID = uuid.New().String()
-		g = game.NewGame()
-		g.Deal()
-		g.DealThirdCard()
-		g.DetermineWinner()
-
-		// 計算賠付
-		payouts = calculatePayouts(g, bets)
-		totalPayout = calculateTotalPayout(payouts)
-
-		// 更新用戶餘額（加上賠付金額）
-		if totalPayout > 0 {
-			if err := db.UpdateUserBalance(tx, userID, totalPayout); err != nil {
+		// 開始事務
+		err = db.Transaction(func(tx *sql.Tx) error {
+			// 扣除投注金額
+			if err := db.UpdateUserBalance(tx, userID, -totalBet); err != nil {
 				return err
 			}
+
+			// 進行遊戲
+			gameID = uuid.New().String()
+			g = game.NewGame()
+			g.Deal()
+			g.DealThirdCard()
+			g.DetermineWinner()
+
+			// 計算賠付
+			payouts = calculatePayouts(g, bets)
+			totalPayout = calculateTotalPayout(payouts)
+
+			// 更新用戶餘額（加上賠付金額）
+			if totalPayout > 0 {
+				if err := db.UpdateUserBalance(tx, userID, totalPayout); err != nil {
+					return err
+				}
+			}
+
+			// 保存遊戲記錄
+			if err := saveGameRecord(tx, g, gameID, payouts); err != nil {
+				return err
+			}
+
+			// 保存投注記錄
+			if err := saveBets(tx, userID, gameID, bets); err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			logger.Error("Error processing game for user", userID, "Error:", err)
+			utils.ServerError(w, "Error processing game")
+			return
 		}
 
-		// 保存遊戲記錄
-		if err := saveGameRecord(tx, g, gameID, payouts); err != nil {
-			return err
+		// 返回遊戲結果
+		gameResult := map[string]interface{}{
+			"gameId":       gameID,
+			"playerCards":  formatCards(g.PlayerHand.Cards),
+			"bankerCards":  formatCards(g.BankerHand.Cards),
+			"playerScore":  g.PlayerScore,
+			"bankerScore":  g.BankerScore,
+			"winner":       g.Winner,
+			"isLuckySix":   g.IsLuckySix,
+			"luckySixType": g.LuckySixType,
+			// 下注明細
+			"bets": map[string]float64{
+				"player":   bets.Player,
+				"banker":   bets.Banker,
+				"tie":      bets.Tie,
+				"luckySix": bets.LuckySix,
+			},
+			// 賠付明細（不含本金）
+			"payouts": map[string]float64{
+				"player":   payouts["player"],
+				"banker":   payouts["banker"],
+				"tie":      payouts["tie"],
+				"luckySix": payouts["luckySix"],
+			},
+			// 本金返還明細
+			"principalReturns": map[string]float64{
+				"player":   payouts["player_principal"],
+				"banker":   payouts["banker_principal"],
+				"tie":      payouts["tie_principal"],
+				"luckySix": payouts["luckySix_principal"],
+			},
+			"totalBet":    totalBet,
+			"totalPayout": totalPayout,
 		}
 
-		// 保存投注記錄
-		if err := saveBets(tx, userID, gameID, bets); err != nil {
-			return err
-		}
+		allGameResults = append(allGameResults, gameResult)
 
-		return nil
-	})
-
-	if err != nil {
-		logger.Error("Error processing game for user", userID, "Error:", err)
-		utils.ServerError(w, "Error processing game")
-		return
+		// 每次遊戲完成後立即輸出日志
+		logger.Info("Successfully processed game for user", userID, "GameID:", gameID, "Round:", i+1, "of", runTimes)
 	}
 
-	// 返回遊戲結果
-	response := map[string]interface{}{
-		"gameId":      gameID,
-		"playerCards": formatCards(g.PlayerHand.Cards),
-		"bankerCards": formatCards(g.BankerHand.Cards),
-		"playerScore": g.PlayerScore,
-		"bankerScore": g.BankerScore,
-		"winner":      g.Winner,
-		"isLuckySix":  g.IsLuckySix,
-		"luckySixType": g.LuckySixType,
-		// 下注明細
-		"bets": map[string]float64{
-			"player":   bets.Player,
-			"banker":   bets.Banker,
-			"tie":      bets.Tie,
-			"luckySix": bets.LuckySix,
-		},
-		// 賠付明細（不含本金）
-		"payouts": map[string]float64{
-			"player":   payouts["player"],
-			"banker":   payouts["banker"],
-			"tie":      payouts["tie"],
-			"luckySix": payouts["luckySix"],
-		},
-		// 本金返還明細
-		"principalReturns": map[string]float64{
-			"player":   payouts["player_principal"],
-			"banker":   payouts["banker_principal"],
-			"tie":      payouts["tie_principal"],
-			"luckySix": payouts["luckySix_principal"],
-		},
-		"totalBet":    totalBet,
-		"totalPayout": totalPayout,
-	}
-
-	logger.Info("Successfully processed game for user", userID, "GameID:", gameID)
-	utils.SuccessResponse(w, response)
+	utils.SuccessResponse(w, allGameResults)
 }
 
 // 格式化牌
@@ -229,10 +253,11 @@ func formatCardsToString(cards []string) string {
 
 // 計算賠付
 func calculatePayouts(g *game.Game, bets struct {
-	Player   float64 `json:"player"`
-	Banker   float64 `json:"banker"`
-	Tie      float64 `json:"tie"`
-	LuckySix float64 `json:"luckySix"`
+	Player    float64 `json:"player"`
+	Banker    float64 `json:"banker"`
+	Tie       float64 `json:"tie"`
+	LuckySix  float64 `json:"luckySix"`
+	RUN_TIMES string  `json:"RUN_TIMES"`
 }) map[string]float64 {
 	payouts := make(map[string]float64)
 
@@ -385,10 +410,11 @@ func saveGameRecord(tx *sql.Tx, g *game.Game, gameID string, payouts map[string]
 
 // 保存投注記錄
 func saveBets(tx *sql.Tx, userID int, gameID string, bets struct {
-	Player   float64 `json:"player"`
-	Banker   float64 `json:"banker"`
-	Tie      float64 `json:"tie"`
-	LuckySix float64 `json:"luckySix"`
+	Player    float64 `json:"player"`
+	Banker    float64 `json:"banker"`
+	Tie       float64 `json:"tie"`
+	LuckySix  float64 `json:"luckySix"`
+	RUN_TIMES string  `json:"RUN_TIMES"`
 }) error {
 	// 保存每個投注
 	if bets.Player > 0 {
