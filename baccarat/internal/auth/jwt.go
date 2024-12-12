@@ -2,7 +2,9 @@ package auth
 
 import (
 	"baccarat/config"
+	"baccarat/pkg/logger"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -29,6 +31,8 @@ func NewJWTService() *JWTService {
 
 // GenerateToken 生成JWT令牌
 func (s *JWTService) GenerateToken(userID int) (string, error) {
+	logger.Debug("Generating JWT token for user:", userID)
+	
 	claims := jwt.RegisteredClaims{
 		Subject:   strconv.Itoa(userID),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.expiry)),
@@ -36,7 +40,14 @@ func (s *JWTService) GenerateToken(userID int) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(s.secretKey)
+	tokenString, err := token.SignedString(s.secretKey)
+	if err != nil {
+		logger.Error("Error signing JWT token:", err)
+		return "", fmt.Errorf("error signing token: %v", err)
+	}
+
+	logger.Debug("JWT token generated successfully for user:", userID)
+	return tokenString, nil
 }
 
 // ValidateToken 驗證並解析JWT令牌
@@ -46,29 +57,35 @@ func (s *JWTService) ValidateToken(tokenString string) (int, error) {
 	})
 
 	if err != nil {
+		logger.Warn("Error parsing JWT token:", err)
 		return 0, ErrInvalidToken
 	}
 
 	if !token.Valid {
+		logger.Warn("Invalid JWT token")
 		return 0, ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(*jwt.RegisteredClaims)
 	if !ok {
+		logger.Warn("Invalid JWT token claims")
 		return 0, ErrInvalidToken
 	}
 
 	// 檢查是否過期
 	if claims.ExpiresAt.Time.Before(time.Now()) {
+		logger.Warn("JWT token has expired")
 		return 0, ErrExpiredToken
 	}
 
 	// 解析用戶ID
 	userID, err := strconv.Atoi(claims.Subject)
 	if err != nil {
+		logger.Error("Error converting user_id to int:", err)
 		return 0, ErrInvalidToken
 	}
 
+	logger.Debug("JWT token validated successfully for user:", userID)
 	return userID, nil
 }
 
