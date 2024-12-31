@@ -190,3 +190,134 @@ func SaveBet(tx *sql.Tx, userID int, gameID string, amount float64, betType stri
 	)
 	return err
 }
+
+// GameResult 遊戲結果完整信息
+type GameResult struct {
+	GameID          string         `json:"game_id"`
+	Winner          string         `json:"winner"`
+	PlayerScore     int            `json:"player_score"`
+	BankerScore     int            `json:"banker_score"`
+	IsLuckySix      bool           `json:"is_lucky_six"`
+	LuckySixType    sql.NullString `json:"lucky_six_type"`
+	PlayerCards     string         `json:"player_cards"`
+	BankerCards     string         `json:"banker_cards"`
+	PlayerThirdCard sql.NullString `json:"player_third_card"`
+	BankerThirdCard sql.NullString `json:"banker_third_card"`
+	PlayerPayout    sql.NullFloat64 `json:"player_payout"`
+	BankerPayout    sql.NullFloat64 `json:"banker_payout"`
+	TiePayout       sql.NullFloat64 `json:"tie_payout"`
+	LuckySixPayout  sql.NullFloat64 `json:"lucky_six_payout"`
+	Bets            []BetDetail    `json:"bets"`
+	TotalBets       float64        `json:"total_bets"`
+	TotalPayouts    float64        `json:"total_payouts"`
+}
+
+// BetDetail 下注詳情
+type BetDetail struct {
+	Username  string         `json:"username"`
+	BetType   string         `json:"bet_type"`
+	BetAmount float64        `json:"bet_amount"`
+	Payout    sql.NullFloat64 `json:"payout"`
+}
+
+// GetGameDetails 獲取單局遊戲的詳細信息
+func GetGameDetails(gameID string) (*GameResult, error) {
+	// 首先查詢遊戲基本信息
+	baseQuery := `
+		SELECT 
+			game_id,
+			winner,
+			player_final_score,
+			banker_final_score,
+			is_lucky_six,
+			lucky_six_type,
+			player_initial_cards,
+			banker_initial_cards,
+			player_third_card,
+			banker_third_card,
+			player_payout,
+			banker_payout,
+			tie_payout,
+			lucky_six_payout
+		FROM game_records
+		WHERE game_id = ?`
+
+	var result GameResult
+	err := DB.QueryRow(baseQuery, gameID).Scan(
+		&result.GameID,
+		&result.Winner,
+		&result.PlayerScore,
+		&result.BankerScore,
+		&result.IsLuckySix,
+		&result.LuckySixType,
+		&result.PlayerCards,
+		&result.BankerCards,
+		&result.PlayerThirdCard,
+		&result.BankerThirdCard,
+		&result.PlayerPayout,
+		&result.BankerPayout,
+		&result.TiePayout,
+		&result.LuckySixPayout,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("遊戲不存在")
+		}
+		return nil, fmt.Errorf("查詢遊戲記錄失敗: %v", err)
+	}
+
+	// 查詢所有下注記錄
+	betsQuery := `
+		SELECT 
+			u.username,
+			b.bet_type,
+			b.bet_amount,
+			CASE b.bet_type 
+				WHEN 'player' THEN gr.player_payout
+				WHEN 'banker' THEN gr.banker_payout
+				WHEN 'tie' THEN gr.tie_payout
+				WHEN 'lucky_six' THEN gr.lucky_six_payout
+			END as payout
+		FROM bets b
+		JOIN users u ON b.user_id = u.id
+		JOIN game_records gr ON b.game_id = gr.game_id
+		WHERE b.game_id = ?
+		ORDER BY u.username, b.bet_type`
+
+	rows, err := DB.Query(betsQuery, gameID)
+	if err != nil {
+		return nil, fmt.Errorf("查詢下注記錄失敗: %v", err)
+	}
+	defer rows.Close()
+
+	// 讀取所有下注記錄
+	var bets []BetDetail
+	for rows.Next() {
+		var bet BetDetail
+		err := rows.Scan(
+			&bet.Username,
+			&bet.BetType,
+			&bet.BetAmount,
+			&bet.Payout,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("讀取下注記錄失敗: %v", err)
+		}
+		bets = append(bets, bet)
+	}
+
+	// 計算總計
+	var totalBets, totalPayouts float64
+	for _, bet := range bets {
+		totalBets += bet.BetAmount
+		if bet.Payout.Valid {
+			totalPayouts += bet.Payout.Float64
+		}
+	}
+
+	result.Bets = bets
+	result.TotalBets = totalBets
+	result.TotalPayouts = totalPayouts
+
+	return &result, nil
+}

@@ -230,6 +230,44 @@ func (h *GameHandler) PlayGame(w http.ResponseWriter, r *http.Request) {
 	utils.SuccessResponse(w, allGameResults)
 }
 
+// GameDetailsRequest 遊戲詳情請求結構
+type GameDetailsRequest struct {
+	GameID string `json:"game_id"`
+}
+
+// GetGameDetails 獲取遊戲詳情
+func (h *GameHandler) GetGameDetails(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		utils.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	// 解析JSON請求
+	var req struct {
+		GameID string `json:"game_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Invalid request format")
+		return
+	}
+
+	// 驗證game_id
+	if req.GameID == "" {
+		utils.ErrorResponse(w, http.StatusBadRequest, "Missing game_id")
+		return
+	}
+
+	// 獲取遊戲詳情
+	result, err := db.GetGameDetails(req.GameID)
+	if err != nil {
+		logger.Error("獲取遊戲詳情失敗:", err)
+		utils.ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	utils.SuccessResponse(w, result)
+}
+
 // 格式化牌
 func formatCards(cards []game.Card) []string {
 	result := make([]string, len(cards))
