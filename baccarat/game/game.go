@@ -187,3 +187,138 @@ func (g *Game) Play() {
 	}
 	g.DetermineWinner()
 }
+
+// GetPlayerHand 获取闲家手牌
+func (g *Game) GetPlayerHand() []Card {
+	return g.PlayerHand.Cards
+}
+
+// GetBankerHand 获取庄家手牌
+func (g *Game) GetBankerHand() []Card {
+	return g.BankerHand.Cards
+}
+
+// GetPlayerScore 获取闲家点数
+func (g *Game) GetPlayerScore() int {
+	return g.PlayerScore
+}
+
+// GetBankerScore 获取庄家点数
+func (g *Game) GetBankerScore() int {
+	return g.BankerScore
+}
+
+// GetWinner 获取赢家
+func (g *Game) GetWinner() string {
+	return g.Winner
+}
+
+// GetIsLuckySix 获取是否幸运6
+func (g *Game) GetIsLuckySix() bool {
+	return g.IsLuckySix
+}
+
+// GetLuckySixType 获取幸运6类型
+func (g *Game) GetLuckySixType() string {
+	return g.LuckySixType
+}
+
+// GetPayouts 获取赔付
+func (g *Game) GetPayouts(bets struct {
+	Player    float64 `json:"player"`
+	Banker    float64 `json:"banker"`
+	Tie       float64 `json:"tie"`
+	LuckySix  float64 `json:"luckySix"`
+	RUN_TIMES string  `json:"RUN_TIMES"`
+}) map[string]float64 {
+	payouts := make(map[string]float64)
+
+	// 记录投注金额
+	if bets.Player > 0 {
+		payouts["player_bet"] = bets.Player
+	}
+	if bets.Banker > 0 {
+		payouts["banker_bet"] = bets.Banker
+	}
+	if bets.Tie > 0 {
+		payouts["tie_bet"] = bets.Tie
+	}
+	if bets.LuckySix > 0 {
+		payouts["luckySix_bet"] = bets.LuckySix
+	}
+
+	// 初始化本金返还（预设为0）
+	payouts["player_principal"] = 0
+	payouts["banker_principal"] = 0
+	payouts["tie_principal"] = 0
+	payouts["luckySix_principal"] = 0
+
+	switch g.Winner {
+	case "Player":
+		if bets.Player > 0 {
+			payouts["player"] = bets.Player * (1 + config.AppConfig.PlayerPayout)
+		}
+	case "Banker":
+		if bets.Banker > 0 {
+			if g.IsLuckySix {
+				if g.LuckySixType == "2cards" {
+					payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerLucky6_2Cards)
+				} else {
+					payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerLucky6_3Cards)
+				}
+			} else {
+				payouts["banker"] = bets.Banker * (1 + config.AppConfig.BankerPayout)
+			}
+		}
+	case "Tie":
+		if bets.Tie > 0 {
+			payouts["tie"] = bets.Tie * config.AppConfig.TiePayout
+		}
+		payouts["player_principal"] = bets.Player
+		payouts["banker_principal"] = bets.Banker
+		payouts["luckySix_principal"] = bets.LuckySix
+	}
+
+	// 处理幸运6
+	if g.IsLuckySix && bets.LuckySix > 0 {
+		if g.LuckySixType == "2cards" {
+			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_2CardsPayout
+		} else {
+			payouts["luckySix"] = bets.LuckySix * config.AppConfig.Lucky6_3CardsPayout
+		}
+	}
+
+	return payouts
+}
+
+// GetTotalPayout 获取总赔付
+func (g *Game) GetTotalPayout(payouts map[string]float64) float64 {
+	total := 0.0
+
+	// 计算赔付（已包含本金）
+	if amount, ok := payouts["player"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["banker"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["tie"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["luckySix"]; ok {
+		total += amount
+	}
+
+	// 和局时的本金返还
+	if amount, ok := payouts["player_principal"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["banker_principal"]; ok {
+		total += amount
+	}
+	if amount, ok := payouts["luckySix_principal"]; ok {
+		total += amount
+	}
+
+	return total
+}
