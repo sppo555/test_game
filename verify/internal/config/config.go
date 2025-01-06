@@ -18,6 +18,7 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	TimeZone   string
+	APIURL     string
 	Token      string
 	GameIDLimit int
 	PlayerPayout float64
@@ -83,6 +84,7 @@ func LoadConfig() *Config {
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
 		TimeZone:   os.Getenv("TIME_ZONE"),
+		APIURL:     os.Getenv("API_URL"),
 		Token:      os.Getenv("API_TOKEN"),
 		GameIDLimit: gameIDLimit,
 		PlayerPayout: playerPayout,

@@ -22,7 +22,7 @@ func main() {
 	defer db.Close()
 
 	// 建立 API 客戶端
-	apiClient := api.NewAPIClient("http://localhost:8080", cfg.Token)
+	apiClient := api.NewAPIClient(cfg.APIURL, cfg.Token)
 
 	// 建立驗證器
 	v := validator.NewValidator(cfg, apiClient)

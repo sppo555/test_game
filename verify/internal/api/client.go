@@ -5,101 +5,66 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
-// GameDetailsResponse 定義 API 回應結構
-type GameDetailsResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		GameID          string          `json:"game_id"`
-		Winner          string          `json:"winner"`
-		PlayerScore     int             `json:"player_score"`
-		BankerScore     int             `json:"banker_score"`
-		IsLuckySix      bool            `json:"is_lucky_six"`
-		LuckySixType    json.RawMessage `json:"lucky_six_type"`
-		PlayerCards     string          `json:"player_cards"`
-		BankerCards     string          `json:"banker_cards"`
-		PlayerThirdCard json.RawMessage `json:"player_third_card"`
-		BankerThirdCard json.RawMessage `json:"banker_third_card"`
-		PlayerPayout    json.RawMessage `json:"player_payout"`
-		BankerPayout    json.RawMessage `json:"banker_payout"`
-		TiePayout       json.RawMessage `json:"tie_payout"`
-		LuckySixPayout  json.RawMessage `json:"lucky_six_payout"`
-		Bets            []Bet           `json:"bets"`
-		TotalBets       float64         `json:"total_bets"`
-		TotalPayouts    float64         `json:"total_payouts"`
-	} `json:"data"`
-}
-
-type Bet struct {
-	Username  string          `json:"username"`
-	BetType   string          `json:"bet_type"`
-	BetAmount float64         `json:"bet_amount"`
-	Payout    json.RawMessage `json:"payout"`
-}
-
 // APIClient 用於調用遊戲 API
 type APIClient struct {
-	BaseURL string
-	Token   string
-	Client  *http.Client
+	baseURL string
+	token   string
 }
 
 // NewAPIClient 建立新的 API 客戶端
 func NewAPIClient(baseURL, token string) *APIClient {
 	return &APIClient{
-		BaseURL: baseURL,
-		Token:   token,
-		Client:  &http.Client{},
+		baseURL: baseURL,
+		token:   token,
 	}
 }
 
 // GetGameDetails 調用 API 獲取遊戲詳情
-func (api *APIClient) GetGameDetails(gameID string) (*GameDetailsResponse, error) {
-	url := fmt.Sprintf("%s/api/game/details", api.BaseURL)
-
+func (c *APIClient) GetGameDetails(gameID string) (*GameDetailsResponse, error) {
+	// 直接使用完整的 API URL
+	url := c.baseURL
+	
+	// 準備請求體
 	payload := map[string]string{
 		"game_id": gameID,
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error marshaling request: %v", err)
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", api.Token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
 
-	resp, err := api.Client.Do(req)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error making request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %s", resp.Status)
+		return nil, fmt.Errorf("API returned status %d %s", resp.StatusCode, resp.Status)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
 
-	var gameDetails GameDetailsResponse
-	err = json.Unmarshal(body, &gameDetails)
-	if err != nil {
-		return nil, err
+	var result GameDetailsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("error parsing response: %v", err)
 	}
 
-	if !gameDetails.Success {
-		return nil, fmt.Errorf("API returned unsuccessful response for game_id %s", gameID)
-	}
-
-	return &gameDetails, nil
+	return &result, nil
 }

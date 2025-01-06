@@ -2,6 +2,7 @@
 package validator
 
 import (
+	"fmt"
 	"github.com/letron/verify/internal/api"
 	"github.com/letron/verify/internal/config"
 )
@@ -19,15 +20,51 @@ func NewValidator(cfg *config.Config, client *api.APIClient) *Validator {
 }
 
 func (v *Validator) ValidateGame(gameDetails *api.GameDetailsResponse) ValidationResult {
-	// 驗證遊戲邏輯
 	result := ValidationResult{
 		GameID:  gameDetails.Data.GameID,
 		IsValid: true,
 		Errors:  []string{},
 	}
-	
-	// TODO: 實現驗證邏輯
-	
+
+	// 驗證每個下注的派彩
+	for _, bet := range gameDetails.Data.Bets {
+		expectedPayout := 0.0
+		actualPayout := 0.0
+		if bet.Payout.Valid {
+			actualPayout = bet.Payout.Float64
+		}
+
+		switch bet.BetType {
+		case "player":
+			if gameDetails.Data.Winner == "Player" {
+				expectedPayout = bet.BetAmount * v.config.PlayerPayout
+			}
+		case "banker":
+			if gameDetails.Data.Winner == "Banker" {
+				expectedPayout = bet.BetAmount * v.config.BankerPayout
+			}
+		case "tie":
+			if gameDetails.Data.Winner == "Tie" {
+				expectedPayout = bet.BetAmount * v.config.TiePayout
+			}
+		case "luckySix":
+			if gameDetails.Data.IsLuckySix {
+				if gameDetails.Data.LuckySixType.Valid && gameDetails.Data.LuckySixType.String == "3cards" {
+					expectedPayout = bet.BetAmount * v.config.Lucky6_3CardsPayout
+				} else {
+					expectedPayout = bet.BetAmount * v.config.Lucky6_2CardsPayout
+				}
+			}
+		}
+
+		if actualPayout != expectedPayout {
+			result.IsValid = false
+			result.Errors = append(result.Errors, 
+				fmt.Sprintf("Invalid payout for %s bet: expected %.2f, got %.2f", 
+					bet.BetType, expectedPayout, actualPayout))
+		}
+	}
+
 	return result
 }
 
