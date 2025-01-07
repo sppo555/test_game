@@ -293,21 +293,24 @@ func formatCardsToString(cards []string) string {
 
 // 保存遊戲記錄
 func saveGameRecord(tx *sql.Tx, g *game.Game, gameID string, payouts map[string]float64) error {
-	// 格式化初始牌
-	playerInitialCards := formatCards(g.GetPlayerHand())
-	bankerInitialCards := formatCards(g.GetBankerHand())
+	// 格式化初始牌（只取前兩張）
+	playerHand := g.GetPlayerHand()
+	bankerHand := g.GetBankerHand()
+	
+	playerInitialCards := formatCards(playerHand[:2])
+	bankerInitialCards := formatCards(bankerHand[:2])
 
 	// 處理第三張牌
 	var playerThirdCard, bankerThirdCard sql.NullString
-	if len(g.GetPlayerHand()) > 2 {
+	if len(playerHand) > 2 {
 		playerThirdCard = sql.NullString{
-			String: formatCard(g.GetPlayerHand()[2]),
+			String: formatCard(playerHand[2]),
 			Valid:  true,
 		}
 	}
-	if len(g.GetBankerHand()) > 2 {
+	if len(bankerHand) > 2 {
 		bankerThirdCard = sql.NullString{
-			String: formatCard(g.GetBankerHand()[2]),
+			String: formatCard(bankerHand[2]),
 			Valid:  true,
 		}
 	}
@@ -326,6 +329,8 @@ func saveGameRecord(tx *sql.Tx, g *game.Game, gameID string, payouts map[string]
 		gameID,
 		formatCardsToString(playerInitialCards),
 		formatCardsToString(bankerInitialCards),
+		g.GetPlayerInitialScore(),  // 新增：保存閒家初始點數
+		g.GetBankerInitialScore(),  // 新增：保存莊家初始點數
 		playerThirdCard,
 		bankerThirdCard,
 		g.GetPlayerScore(),

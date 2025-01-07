@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS game_records (
     game_id VARCHAR(36) UNIQUE NOT NULL,
     player_initial_cards TEXT NOT NULL,
     banker_initial_cards TEXT NOT NULL,
+    player_initial_score INT NOT NULL,  -- 新增：閒家初始牌點數
+    banker_initial_score INT NOT NULL,  -- 新增：莊家初始牌點數
     player_third_card VARCHAR(10),
     banker_third_card VARCHAR(10),
     player_final_score INT NOT NULL,

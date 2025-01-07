@@ -72,6 +72,7 @@ func Transaction(fn func(*sql.Tx) error) error {
 
 // SaveGameRecord saves the game record to database
 func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string,
+	playerInitialScore, bankerInitialScore int,
 	playerThirdCard, bankerThirdCard sql.NullString,
 	playerFinalScore, bankerFinalScore int,
 	winner string, isLuckySix bool,
@@ -82,12 +83,13 @@ func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string
 		query := `
 			INSERT INTO game_records (
 				game_id, player_initial_cards, banker_initial_cards,
+				player_initial_score, banker_initial_score,
 				player_third_card, banker_third_card,
 				player_final_score, banker_final_score,
 				winner, is_lucky_six, lucky_six_type,
 				player_payout, banker_payout, tie_payout, lucky_six_payout,
 				total_bets, total_payouts
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 
 		var playerPayout, bankerPayout, tiePayout, luckySixPayout sql.NullFloat64
@@ -127,6 +129,7 @@ func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string
 
 		_, err := tx.Exec(query,
 			gameID, playerInitialCards, bankerInitialCards,
+			playerInitialScore, bankerInitialScore,
 			playerThirdCard, bankerThirdCard,
 			playerFinalScore, bankerFinalScore,
 			winner, isLuckySix, luckySixType,
@@ -193,23 +196,25 @@ func SaveBet(tx *sql.Tx, userID int, gameID string, amount float64, betType stri
 
 // GameResult 遊戲結果完整信息
 type GameResult struct {
-	GameID          string         `json:"game_id"`
-	Winner          string         `json:"winner"`
-	PlayerScore     int            `json:"player_score"`
-	BankerScore     int            `json:"banker_score"`
-	IsLuckySix      bool           `json:"is_lucky_six"`
-	LuckySixType    sql.NullString `json:"lucky_six_type"`
-	PlayerCards     string         `json:"player_cards"`
-	BankerCards     string         `json:"banker_cards"`
-	PlayerThirdCard sql.NullString `json:"player_third_card"`
-	BankerThirdCard sql.NullString `json:"banker_third_card"`
-	PlayerPayout    sql.NullFloat64 `json:"player_payout"`
-	BankerPayout    sql.NullFloat64 `json:"banker_payout"`
-	TiePayout       sql.NullFloat64 `json:"tie_payout"`
-	LuckySixPayout  sql.NullFloat64 `json:"lucky_six_payout"`
-	Bets            []BetDetail    `json:"bets"`
-	TotalBets       float64        `json:"total_bets"`
-	TotalPayouts    float64        `json:"total_payouts"`
+	GameID             string         `json:"game_id"`
+	Winner             string         `json:"winner"`
+	PlayerInitialScore int            `json:"player_initial_score"`
+	BankerInitialScore int            `json:"banker_initial_score"`
+	PlayerScore        int            `json:"player_score"`
+	BankerScore        int            `json:"banker_score"`
+	IsLuckySix         bool           `json:"is_lucky_six"`
+	LuckySixType       sql.NullString `json:"lucky_six_type"`
+	PlayerCards        string         `json:"player_cards"`
+	BankerCards        string         `json:"banker_cards"`
+	PlayerThirdCard    sql.NullString `json:"player_third_card"`
+	BankerThirdCard    sql.NullString `json:"banker_third_card"`
+	PlayerPayout       sql.NullFloat64 `json:"player_payout"`
+	BankerPayout       sql.NullFloat64 `json:"banker_payout"`
+	TiePayout          sql.NullFloat64 `json:"tie_payout"`
+	LuckySixPayout     sql.NullFloat64 `json:"lucky_six_payout"`
+	Bets               []BetDetail    `json:"bets"`
+	TotalBets          float64        `json:"total_bets"`
+	TotalPayouts       float64        `json:"total_payouts"`
 }
 
 // BetDetail 下注詳情
@@ -227,6 +232,8 @@ func GetGameDetails(gameID string) (*GameResult, error) {
 		SELECT 
 			game_id,
 			winner,
+			player_initial_score,
+			banker_initial_score,
 			player_final_score,
 			banker_final_score,
 			is_lucky_six,
@@ -246,6 +253,8 @@ func GetGameDetails(gameID string) (*GameResult, error) {
 	err := DB.QueryRow(baseQuery, gameID).Scan(
 		&result.GameID,
 		&result.Winner,
+		&result.PlayerInitialScore,
+		&result.BankerInitialScore,
 		&result.PlayerScore,
 		&result.BankerScore,
 		&result.IsLuckySix,
@@ -276,7 +285,7 @@ func GetGameDetails(gameID string) (*GameResult, error) {
 				WHEN 'player' THEN gr.player_payout
 				WHEN 'banker' THEN gr.banker_payout
 				WHEN 'tie' THEN gr.tie_payout
-				WHEN 'lucky_six' THEN gr.lucky_six_payout
+				WHEN 'luckySix' THEN gr.lucky_six_payout
 			END as payout
 		FROM bets b
 		JOIN users u ON b.user_id = u.id
