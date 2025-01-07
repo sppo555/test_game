@@ -64,6 +64,7 @@ type ValidationRule struct {
 	Query             string `json:"query"`
 	Description       string `json:"description"`
 	ChineseDescription string `json:"chinese_description"`
+	Enabled           bool   `json:"enabled"`
 }
 
 type ValidationRules struct {
@@ -115,8 +116,13 @@ func ValidateGames(db *sql.DB, rules *ValidationRules) (*ValidationResults, erro
 	// 用於追踪每個遊戲違反的規則
 	invalidGameMap := make(map[string]bool)
 
-	// 對每個規則執行驗證
+	// 對每個啟用的規則執行驗證
 	for _, rule := range rules.Rules {
+		// 跳過未啟用的規則
+		if !rule.Enabled {
+			continue
+		}
+
 		rows, err := db.Query(rule.Query)
 		if err != nil {
 			return nil, fmt.Errorf("執行驗證規則 '%s' 失敗: %v", rule.Name, err)
@@ -196,13 +202,10 @@ func (v *SQLVerifier) VerifyGames() error {
 		uniqueInvalidGames[result.GameID] = true
 	}
 
-	fmt.Println("\n=== SQL 驗證結果 ===")
-	fmt.Printf("檢查遊戲總數: %d\n", totalGames)
-	fmt.Printf("有效遊戲數: %d\n", len(results.ValidGames))
-	fmt.Printf("無效遊戲數: %d\n\n", len(uniqueInvalidGames))
+	fmt.Println("\nRunning in SQL verification mode...")
 
 	if len(results.InvalidGames) > 0 {
-		fmt.Println("按規則列出無效遊戲:")
+		fmt.Println("\n按規則列出無效遊戲:")
 		ruleMap := make(map[string][]ValidationResult)
 		for _, result := range results.InvalidGames {
 			ruleMap[result.Rule] = append(ruleMap[result.Rule], result)
@@ -218,6 +221,12 @@ func (v *SQLVerifier) VerifyGames() error {
 			}
 		}
 	}
+
+	// 在最後輸出統計結果
+	fmt.Println("\n=== SQL 驗證結果 ===")
+	fmt.Printf("檢查遊戲總數: %d\n", totalGames)
+	fmt.Printf("有效遊戲數: %d\n", len(results.ValidGames))
+	fmt.Printf("無效遊戲數: %d\n", len(uniqueInvalidGames))
 
 	return nil
 }

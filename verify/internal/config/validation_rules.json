@@ -5,126 +5,144 @@
             "chinese_name": "幸運六規則檢查 1",
             "query": "SELECT game_id, winner, banker_final_score, is_lucky_six FROM game_records WHERE banker_final_score = 6 AND winner != 'Banker' AND is_lucky_six = 1",
             "description": "Lucky Six is marked but winner is not Banker with score 6",
-            "chinese_description": "標記了幸運六但贏家不是莊家或莊家分數不是6點"
+            "chinese_description": "標記了幸運六但贏家不是莊家或莊家分數不是6點",
+            "enabled": true
         },
         {
             "name": "Lucky Six Rule Check 2",
             "chinese_name": "幸運六規則檢查 2",
             "query": "SELECT game_id, winner, banker_final_score, is_lucky_six FROM game_records WHERE banker_final_score = 6 AND winner = 'Banker' AND is_lucky_six = 0",
             "description": "Banker wins with score 6 but Lucky Six is not marked",
-            "chinese_description": "莊家以6點獲勝但未標記幸運六"
+            "chinese_description": "莊家以6點獲勝但未標記幸運六",
+            "enabled": true
         },
         {
             "name": "Natural Hand Check",
             "chinese_name": "自然牌檢查",
             "query": "SELECT game_id, banker_initial_score, player_initial_score, banker_third_card, player_third_card FROM game_records WHERE (banker_initial_score BETWEEN 8 AND 9 OR player_initial_score BETWEEN 8 AND 9) AND (banker_third_card IS NOT NULL OR player_third_card IS NOT NULL)",
             "description": "Natural hand (8 or 9) but has third card",
-            "chinese_description": "有自然牌(8或9點)但仍補了第三張牌"
+            "chinese_description": "有自然牌(8或9點)但仍補了第三張牌",
+            "enabled": true
         },
         {
             "name": "Final Score Natural Check",
             "chinese_name": "最終分數自然牌檢查",
             "query": "SELECT game_id, player_final_score, banker_final_score, player_third_card, banker_third_card FROM game_records WHERE (player_final_score BETWEEN 8 AND 9 OR banker_final_score BETWEEN 8 AND 9) AND (player_third_card IS NOT NULL OR banker_third_card IS NOT NULL)",
             "description": "Final score is natural (8 or 9) but has third card",
-            "chinese_description": "最終分數為自然牌(8或9點)但有第三張牌"
+            "chinese_description": "最終分數為自然牌(8或9點)但有第三張牌",
+            "enabled": true
         },
         {
             "name": "Player Win Check",
             "chinese_name": "玩家獲勝檢查",
             "query": "SELECT game_id, player_final_score, banker_final_score, winner FROM game_records WHERE player_final_score > banker_final_score AND winner != 'Player'",
             "description": "Player score is higher but winner is not Player",
-            "chinese_description": "玩家分數較高但贏家不是玩家"
+            "chinese_description": "玩家分數較高但贏家不是玩家",
+            "enabled": true
         },
         {
             "name": "Banker Win Check",
             "chinese_name": "莊家獲勝檢查",
             "query": "SELECT game_id, player_final_score, banker_final_score, winner FROM game_records WHERE banker_final_score > player_final_score AND winner != 'Banker'",
             "description": "Banker score is higher but winner is not Banker",
-            "chinese_description": "莊家分數較高但贏家不是莊家"
+            "chinese_description": "莊家分數較高但贏家不是莊家",
+            "enabled": true
         },
         {
             "name": "Tie Check",
             "chinese_name": "和局檢查",
             "query": "SELECT game_id, player_final_score, banker_final_score, winner FROM game_records WHERE player_final_score = banker_final_score AND winner != 'Tie'",
             "description": "Scores are equal but winner is not Tie",
-            "chinese_description": "分數相同但未判定為和局"
+            "chinese_description": "分數相同但未判定為和局",
+            "enabled": true
         },
         {
             "name": "Player Draw Rule Check",
             "chinese_name": "玩家補牌規則檢查",
             "query": "SELECT game_id, player_initial_score, player_third_card FROM game_records WHERE player_initial_score <= 5 AND player_third_card IS NULL",
             "description": "Player score <= 5 but no third card drawn",
-            "chinese_description": "玩家分數小於等於5點但未補牌"
+            "chinese_description": "玩家分數小於等於5點但未補牌",
+            "enabled": true
         },
         {
             "name": "Score Consistency Check",
             "chinese_name": "分數一致性檢查",
             "query": "SELECT game_id, player_initial_score, banker_initial_score, player_final_score, banker_final_score, player_third_card, banker_third_card FROM game_records WHERE player_third_card IS NULL AND banker_third_card IS NULL AND (player_initial_score != player_final_score OR banker_initial_score != banker_final_score)",
             "description": "Initial and final scores mismatch without third card",
-            "chinese_description": "無補牌情況下初始分數與最終分數不一致"
+            "chinese_description": "無補牌情況下初始分數與最終分數不一致",
+            "enabled": true
         },
         {
             "name": "Score Range Check",
             "chinese_name": "分數範圍檢查",
             "query": "SELECT game_id, player_initial_score, banker_initial_score, player_final_score, banker_final_score FROM game_records WHERE player_initial_score NOT BETWEEN 0 AND 9 OR banker_initial_score NOT BETWEEN 0 AND 9 OR player_final_score NOT BETWEEN 0 AND 9 OR banker_final_score NOT BETWEEN 0 AND 9",
             "description": "Score not in valid range (0-9)",
-            "chinese_description": "分數不在有效範圍內(0-9)"
+            "chinese_description": "分數不在有效範圍內(0-9)",
+            "enabled": true
         },
         {
             "name": "Winner Value Check",
             "chinese_name": "獲勝者值檢查",
             "query": "SELECT game_id, winner FROM game_records WHERE winner NOT IN ('Player', 'Banker', 'Tie')",
             "description": "Invalid winner value",
-            "chinese_description": "無效的獲勝者值"
+            "chinese_description": "無效的獲勝者值",
+            "enabled": true
         },
         {
             "name": "Lucky Six Type Check",
             "chinese_name": "幸運六類型檢查",
             "query": "SELECT game_id, lucky_six_type, banker_final_score, winner, is_lucky_six FROM game_records WHERE (lucky_six_type IS NOT NULL AND (banker_final_score != 6 OR winner != 'Banker' OR is_lucky_six = 0))",
             "description": "Invalid Lucky Six type configuration",
-            "chinese_description": "無效的幸運六類型配置"
+            "chinese_description": "無效的幸運六類型配置",
+            "enabled": true
         },
         {
             "name": "Third Card Rule Check",
             "chinese_name": "第三張牌規則檢查",
             "query": "SELECT game_id, player_third_card, player_initial_score, banker_third_card, banker_initial_score FROM game_records WHERE (player_third_card IS NOT NULL AND player_initial_score > 5) OR (banker_third_card IS NOT NULL AND banker_initial_score > 6)",
             "description": "Invalid third card draw",
-            "chinese_description": "無效的補牌"
+            "chinese_description": "無效的補牌",
+            "enabled": true
         },
         {
             "name": "Banker Draw Rule Check",
             "chinese_name": "莊家補牌規則檢查",
             "query": "SELECT game_id, banker_initial_score, banker_third_card FROM game_records WHERE banker_initial_score <= 2 AND banker_third_card IS NULL",
             "description": "Banker score <= 2 but no third card drawn",
-            "chinese_description": "莊家分數小於等於2點但未補牌"
+            "chinese_description": "莊家分數小於等於2點但未補牌",
+            "enabled": true
         },
         {
             "name": "Banker No Draw Rule Check",
             "chinese_name": "莊家不補牌規則檢查",
             "query": "SELECT game_id, banker_initial_score, banker_third_card FROM game_records WHERE banker_initial_score = 7 AND banker_third_card IS NOT NULL",
             "description": "Banker score is 7 but drew third card",
-            "chinese_description": "莊家分數為7點但仍補牌"
-        },
-        {
-            "name": "Card Format Check",
-            "chinese_name": "牌面格式檢查",
-            "query": "SELECT game_id, player_initial_cards, banker_initial_cards FROM game_records WHERE player_initial_cards NOT REGEXP '^[HSDC][2-9TJQKA],[HSDC][2-9TJQKA]$' OR banker_initial_cards NOT REGEXP '^[HSDC][2-9TJQKA],[HSDC][2-9TJQKA]$'",
-            "description": "Invalid card format",
-            "chinese_description": "無效的牌面格式"
-        },
-        {
-            "name": "Third Card Format Check",
-            "chinese_name": "第三張牌格式檢查",
-            "query": "SELECT game_id, player_third_card, banker_third_card FROM game_records WHERE (player_third_card IS NOT NULL AND player_third_card NOT REGEXP '^[HSDC][2-9TJQKA]$') OR (banker_third_card IS NOT NULL AND banker_third_card NOT REGEXP '^[HSDC][2-9TJQKA]$')",
-            "description": "Invalid third card format",
-            "chinese_description": "無效的第三張牌格式"
+            "chinese_description": "莊家分數為7點但仍補牌",
+            "enabled": true
         },
         {
             "name": "Duplicate Card Check",
             "chinese_name": "重複牌檢查",
             "query": "SELECT game_id, player_initial_cards, banker_initial_cards, player_third_card, banker_third_card FROM game_records WHERE (SUBSTRING_INDEX(player_initial_cards, ',', 1) = SUBSTRING_INDEX(player_initial_cards, ',', -1) OR player_initial_cards = banker_initial_cards OR (player_third_card IS NOT NULL AND (player_third_card = SUBSTRING_INDEX(player_initial_cards, ',', 1) OR player_third_card = SUBSTRING_INDEX(player_initial_cards, ',', -1) OR player_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', 1) OR player_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', -1))) OR (banker_third_card IS NOT NULL AND (banker_third_card = SUBSTRING_INDEX(player_initial_cards, ',', 1) OR banker_third_card = SUBSTRING_INDEX(player_initial_cards, ',', -1) OR banker_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', 1) OR banker_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', -1) OR (player_third_card IS NOT NULL AND banker_third_card = player_third_card))))",
             "description": "Duplicate cards found",
-            "chinese_description": "發現重複的牌"
+            "chinese_description": "發現重複的牌",
+            "enabled": true
+        },
+        {
+            "name": "Card Format Check",
+            "chinese_name": "牌面格式檢查",
+            "query": "SELECT game_id, player_initial_cards, banker_initial_cards FROM game_records WHERE player_initial_cards NOT REGEXP '^[HSDC][2-9TJQKA],[HSDC][2-9TJQKA]$' OR banker_initial_cards NOT REGEXP '^[HSDC][2-9TJQKA],[HSDC][2-9TJQKA]$'",
+            "description": "Invalid card format",
+            "chinese_description": "無效的牌面格式",
+            "enabled": false
+        },
+        {
+            "name": "Third Card Format Check",
+            "chinese_name": "第三張牌格式檢查",
+            "query": "SELECT game_id, player_third_card, banker_third_card FROM game_records WHERE (player_third_card IS NOT NULL AND player_third_card NOT REGEXP '^[HSDC][2-9TJQKA]$') OR (banker_third_card IS NOT NULL AND banker_third_card NOT REGEXP '^[HSDC][2-9TJQKA]$')",
+            "description": "Invalid third card format",
+            "chinese_description": "無效的第三張牌格式",
+            "enabled": false
         }
     ]
 }
