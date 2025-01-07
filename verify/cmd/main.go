@@ -1,8 +1,6 @@
-// main.go
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	
@@ -10,7 +8,45 @@ import (
 	"github.com/letron/verify/internal/config"
 	"github.com/letron/verify/internal/db"
 	"github.com/letron/verify/internal/api"
+	"github.com/letron/verify/internal/verify"
 )
+
+func main() {
+	// 讀取配置
+	cfg := config.LoadConfig()
+
+	// 如果啟用了 SQL 驗證模式，執行 SQL 驗證
+	if cfg.SQLVerifyMode {
+		fmt.Println("Running in SQL verification mode...")
+		verifier, err := verify.NewSQLVerifier(cfg)
+		if err != nil {
+			log.Fatalf("Error creating SQL verifier: %v", err)
+		}
+		defer verifier.Close()
+
+		if err := verifier.VerifyGames(); err != nil {
+			log.Fatalf("Error verifying games: %v", err)
+		}
+		return
+	}
+
+	// 否則執行標準驗證
+	// 建立資料庫連線
+	db := db.NewDB(cfg)
+	defer db.Close()
+
+	// 建立 API 客戶端
+	apiClient := api.NewAPIClient(cfg.APIURL, cfg.Token)
+
+	// 建立驗證器
+	v := validator.NewValidator(cfg, apiClient)
+
+	if cfg.SingleGameMode {
+		validateSingleGame(cfg, v, apiClient)
+	} else {
+		validateMultipleGames(cfg, v, apiClient, db)
+	}
+}
 
 func validateSingleGame(cfg *config.Config, v *validator.Validator, apiClient *api.APIClient) {
 	fmt.Printf("\n=== Validating Single Game ID: %s ===\n", cfg.SingleGameID)
@@ -19,14 +55,6 @@ func validateSingleGame(cfg *config.Config, v *validator.Validator, apiClient *a
 	gameDetails, err := apiClient.GetGameDetails(cfg.SingleGameID)
 	if err != nil {
 		log.Fatalf("Error fetching game details: %v\n", err)
-	}
-
-	// 輸出遊戲詳情
-	prettyJSON, err := json.MarshalIndent(gameDetails, "", "  ")
-	if err != nil {
-		log.Printf("Error formatting game details: %v\n", err)
-	} else {
-		fmt.Printf("\nAPI Response:\n%s\n", string(prettyJSON))
 	}
 
 	// 驗證遊戲
@@ -69,14 +97,6 @@ func validateMultipleGames(cfg *config.Config, v *validator.Validator, apiClient
 			continue
 		}
 
-		// 輸出遊戲詳情
-		prettyJSON, err := json.MarshalIndent(gameDetails, "", "  ")
-		if err != nil {
-			log.Printf("Error formatting game details: %v\n", err)
-		} else {
-			fmt.Printf("\nAPI Response:\n%s\n", string(prettyJSON))
-		}
-
 		// 驗證遊戲
 		result := v.ValidateGame(gameDetails)
 		
@@ -103,25 +123,4 @@ func validateMultipleGames(cfg *config.Config, v *validator.Validator, apiClient
 
 	// 輸出總結果
 	fmt.Println(totalResult.String())
-}
-
-func main() {
-	// 讀取配置
-	cfg := config.LoadConfig()
-
-	// 建立資料庫連線
-	db := db.NewDB(cfg)
-	defer db.Close()
-
-	// 建立 API 客戶端
-	apiClient := api.NewAPIClient(cfg.APIURL, cfg.Token)
-
-	// 建立驗證器
-	v := validator.NewValidator(cfg, apiClient)
-
-	if cfg.SingleGameMode {
-		validateSingleGame(cfg, v, apiClient)
-	} else {
-		validateMultipleGames(cfg, v, apiClient, db)
-	}
 }

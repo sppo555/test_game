@@ -24,6 +24,8 @@ type Config struct {
 	// 單次驗證配置
 	SingleGameMode bool
 	SingleGameID   string
+	// SQL驗證配置
+	SQLVerifyMode bool
 	// 賠率配置
 	PlayerPayout            float64
 	BankerPayout           float64
@@ -32,6 +34,7 @@ type Config struct {
 	Lucky6_3CardsPayout    float64
 	BankerLucky6_2CardsPayout float64
 	BankerLucky6_3CardsPayout float64
+	BatchSize               int // 添加 BatchSize 字段
 }
 
 // LoadConfig 從 .env 讀取配置
@@ -113,6 +116,17 @@ func LoadConfig() *Config {
 		log.Fatal("Invalid BANKER_LUCKY6_3CARDS_PAYOUT")
 	}
 
+	sqlVerifyMode, err := strconv.ParseBool(os.Getenv("SQL_VERIFY_MODE"))
+	if err != nil {
+		log.Printf("Warning: Invalid SQL_VERIFY_MODE, defaulting to false")
+		sqlVerifyMode = false
+	}
+
+	batchSize, err := strconv.Atoi(os.Getenv("BATCH_SIZE")) // 添加 BatchSize 的讀取
+	if err != nil {
+		log.Fatal("Invalid BATCH_SIZE")
+	}
+
 	return &Config{
 		DBHost:     os.Getenv("DB_HOST"),
 		DBPort:     dbPort,
@@ -125,6 +139,7 @@ func LoadConfig() *Config {
 		GameIDLimit: gameIDLimit,
 		SingleGameMode: singleGameMode,
 		SingleGameID:   os.Getenv("SINGLE_GAME_ID"),
+		SQLVerifyMode: sqlVerifyMode,
 		PlayerPayout:            playerPayout,
 		BankerPayout:           bankerPayout,
 		TiePayout:              tiePayout,
@@ -132,5 +147,6 @@ func LoadConfig() *Config {
 		Lucky6_3CardsPayout:    lucky6_3CardsPayout,
 		BankerLucky6_2CardsPayout: bankerLucky6_2CardsPayout,
 		BankerLucky6_3CardsPayout: bankerLucky6_3CardsPayout,
+		BatchSize: batchSize, // 添加 BatchSize 到返回的配置中
 	}
 }
