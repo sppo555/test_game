@@ -73,22 +73,23 @@ func (g *Game) NeedThirdCard() bool {
 
 // DealThirdCard 發第三張牌
 func (g *Game) DealThirdCard() {
-	// 閒家補牌
-	if g.PlayerScore <= 5 {
-		playerThirdCard := g.Deck.DrawCard()
-		g.PlayerHand.Cards = append(g.PlayerHand.Cards, playerThirdCard)
-		g.calculateScores()
+    if g.PlayerScore <= 5 {
+        playerThirdCard := g.Deck.DrawCard()
+        g.PlayerHand.Cards = append(g.PlayerHand.Cards, playerThirdCard)
+        g.calculateScores()
 
-		// 莊家補牌規則
-		playerThirdValue := playerThirdCard.GetCardValue()
-		if g.shouldBankerDrawThird(playerThirdValue) {
-			g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
-			g.calculateScores()
-		}
-	} else if g.BankerScore <= 5 { // 閒家不補牌，莊家點數<=5時補牌
-		g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
-		g.calculateScores()
-	}
+        // 如果閒家補牌後不是天牌(8,9點)，才考慮莊家補牌
+        if g.PlayerScore < 8 {
+            playerThirdValue := playerThirdCard.GetCardValue()
+            if g.shouldBankerDrawThird(playerThirdValue) {
+                g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
+                g.calculateScores()
+            }
+        }
+    } else if g.BankerScore <= 5 { // 閒家不補牌，莊家點數<=5時補牌
+        g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
+        g.calculateScores()
+    }
 }
 
 // shouldBankerDrawThird 判斷莊家是否需要補第三張牌
@@ -321,4 +322,24 @@ func (g *Game) GetTotalPayout(payouts map[string]float64) float64 {
 	}
 
 	return total
+}
+
+// GetPlayerInitialScore 獲取閒家初始點數
+func (g *Game) GetPlayerInitialScore() int {
+    score := 0
+    // 只計算前兩張牌
+    for i := 0; i < 2 && i < len(g.PlayerHand.Cards); i++ {
+        score = (score + g.PlayerHand.Cards[i].GetCardValue()) % 10
+    }
+    return score
+}
+
+// GetBankerInitialScore 獲取莊家初始點數
+func (g *Game) GetBankerInitialScore() int {
+    score := 0
+    // 只計算前兩張牌
+    for i := 0; i < 2 && i < len(g.BankerHand.Cards); i++ {
+        score = (score + g.BankerHand.Cards[i].GetCardValue()) % 10
+    }
+    return score
 }
