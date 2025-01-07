@@ -21,11 +21,15 @@ type Config struct {
 	APIURL     string
 	Token      string
 	GameIDLimit int
-	PlayerPayout float64
-	BankerPayout float64
-	TiePayout float64
-	Lucky6_2CardsPayout float64
-	Lucky6_3CardsPayout float64
+	// 單次驗證配置
+	SingleGameMode bool
+	SingleGameID   string
+	// 賠率配置
+	PlayerPayout            float64
+	BankerPayout           float64
+	TiePayout              float64
+	Lucky6_2CardsPayout    float64
+	Lucky6_3CardsPayout    float64
 	BankerLucky6_2CardsPayout float64
 	BankerLucky6_3CardsPayout float64
 }
@@ -56,26 +60,58 @@ func LoadConfig() *Config {
 	}
 
 	if !loaded {
-		log.Printf("Warning: Could not load .env file")
+		log.Fatal("Error: Could not find .env file in any of the search paths")
 	}
 
 	dbPort, err := strconv.Atoi(os.Getenv("DB_PORT"))
 	if err != nil {
-		dbPort = 3306 // 默認 MySQL 端口
+		log.Fatal("Invalid DB_PORT")
 	}
 
 	gameIDLimit, err := strconv.Atoi(os.Getenv("GAME_ID_LIMIT"))
 	if err != nil {
-		gameIDLimit = 100 // 默認限制
+		log.Fatal("Invalid GAME_ID_LIMIT")
 	}
 
-	playerPayout, _ := strconv.ParseFloat(os.Getenv("PLAYER_PAYOUT"), 64)
-	bankerPayout, _ := strconv.ParseFloat(os.Getenv("BANKER_PAYOUT"), 64)
-	tiePayout, _ := strconv.ParseFloat(os.Getenv("TIE_PAYOUT"), 64)
-	lucky6_2CardsPayout, _ := strconv.ParseFloat(os.Getenv("LUCKY6_2CARDS_PAYOUT"), 64)
-	lucky6_3CardsPayout, _ := strconv.ParseFloat(os.Getenv("LUCKY6_3CARDS_PAYOUT"), 64)
-	bankerLucky6_2CardsPayout, _ := strconv.ParseFloat(os.Getenv("BANKER_LUCKY6_2CARDS_PAYOUT"), 64)
-	bankerLucky6_3CardsPayout, _ := strconv.ParseFloat(os.Getenv("BANKER_LUCKY6_3CARDS_PAYOUT"), 64)
+	singleGameMode, err := strconv.ParseBool(os.Getenv("SINGLE_GAME_MODE"))
+	if err != nil {
+		log.Fatal("Invalid SINGLE_GAME_MODE")
+	}
+
+	playerPayout, err := strconv.ParseFloat(os.Getenv("PLAYER_PAYOUT"), 64)
+	if err != nil {
+		log.Fatal("Invalid PLAYER_PAYOUT")
+	}
+
+	bankerPayout, err := strconv.ParseFloat(os.Getenv("BANKER_PAYOUT"), 64)
+	if err != nil {
+		log.Fatal("Invalid BANKER_PAYOUT")
+	}
+
+	tiePayout, err := strconv.ParseFloat(os.Getenv("TIE_PAYOUT"), 64)
+	if err != nil {
+		log.Fatal("Invalid TIE_PAYOUT")
+	}
+
+	lucky6_2CardsPayout, err := strconv.ParseFloat(os.Getenv("LUCKY6_2CARDS_PAYOUT"), 64)
+	if err != nil {
+		log.Fatal("Invalid LUCKY6_2CARDS_PAYOUT")
+	}
+
+	lucky6_3CardsPayout, err := strconv.ParseFloat(os.Getenv("LUCKY6_3CARDS_PAYOUT"), 64)
+	if err != nil {
+		log.Fatal("Invalid LUCKY6_3CARDS_PAYOUT")
+	}
+
+	bankerLucky6_2CardsPayout, err := strconv.ParseFloat(os.Getenv("BANKER_LUCKY6_2CARDS_PAYOUT"), 64)
+	if err != nil {
+		log.Fatal("Invalid BANKER_LUCKY6_2CARDS_PAYOUT")
+	}
+
+	bankerLucky6_3CardsPayout, err := strconv.ParseFloat(os.Getenv("BANKER_LUCKY6_3CARDS_PAYOUT"), 64)
+	if err != nil {
+		log.Fatal("Invalid BANKER_LUCKY6_3CARDS_PAYOUT")
+	}
 
 	return &Config{
 		DBHost:     os.Getenv("DB_HOST"),
@@ -87,11 +123,13 @@ func LoadConfig() *Config {
 		APIURL:     os.Getenv("API_URL"),
 		Token:      os.Getenv("API_TOKEN"),
 		GameIDLimit: gameIDLimit,
-		PlayerPayout: playerPayout,
-		BankerPayout: bankerPayout,
-		TiePayout: tiePayout,
-		Lucky6_2CardsPayout: lucky6_2CardsPayout,
-		Lucky6_3CardsPayout: lucky6_3CardsPayout,
+		SingleGameMode: singleGameMode,
+		SingleGameID:   os.Getenv("SINGLE_GAME_ID"),
+		PlayerPayout:            playerPayout,
+		BankerPayout:           bankerPayout,
+		TiePayout:              tiePayout,
+		Lucky6_2CardsPayout:    lucky6_2CardsPayout,
+		Lucky6_3CardsPayout:    lucky6_3CardsPayout,
 		BankerLucky6_2CardsPayout: bankerLucky6_2CardsPayout,
 		BankerLucky6_3CardsPayout: bankerLucky6_3CardsPayout,
 	}

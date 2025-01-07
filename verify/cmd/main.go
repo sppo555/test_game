@@ -12,20 +12,38 @@ import (
 	"github.com/letron/verify/internal/api"
 )
 
-func main() {
-	// 讀取配置
-	cfg := config.LoadConfig()
+func validateSingleGame(cfg *config.Config, v *validator.Validator, apiClient *api.APIClient) {
+	fmt.Printf("\n=== Validating Single Game ID: %s ===\n", cfg.SingleGameID)
+	
+	// 從 API 獲取遊戲詳情
+	gameDetails, err := apiClient.GetGameDetails(cfg.SingleGameID)
+	if err != nil {
+		log.Fatalf("Error fetching game details: %v\n", err)
+	}
 
-	// 建立資料庫連線
-	db := db.NewDB(cfg)
-	defer db.Close()
+	// 輸出遊戲詳情
+	prettyJSON, err := json.MarshalIndent(gameDetails, "", "  ")
+	if err != nil {
+		log.Printf("Error formatting game details: %v\n", err)
+	} else {
+		fmt.Printf("\nAPI Response:\n%s\n", string(prettyJSON))
+	}
 
-	// 建立 API 客戶端
-	apiClient := api.NewAPIClient(cfg.APIURL, cfg.Token)
+	// 驗證遊戲
+	result := v.ValidateGame(gameDetails)
+	
+	// 輸出驗證結果
+	if len(result.InvalidGameIDs) == 0 {
+		fmt.Printf("\nValidation Result: Valid\n")
+	} else {
+		fmt.Printf("\nValidation Result: Invalid\n")
+		for _, errMsg := range result.ErrorDetails {
+			fmt.Printf("Error: %s\n", errMsg)
+		}
+	}
+}
 
-	// 建立驗證器
-	v := validator.NewValidator(cfg, apiClient)
-
+func validateMultipleGames(cfg *config.Config, v *validator.Validator, apiClient *api.APIClient, db *db.DB) {
 	// 查詢最新的 game_ids
 	gameIDs, err := db.GetLatestGameIDs(cfg.GameIDLimit)
 	if err != nil {
@@ -85,4 +103,25 @@ func main() {
 
 	// 輸出總結果
 	fmt.Println(totalResult.String())
+}
+
+func main() {
+	// 讀取配置
+	cfg := config.LoadConfig()
+
+	// 建立資料庫連線
+	db := db.NewDB(cfg)
+	defer db.Close()
+
+	// 建立 API 客戶端
+	apiClient := api.NewAPIClient(cfg.APIURL, cfg.Token)
+
+	// 建立驗證器
+	v := validator.NewValidator(cfg, apiClient)
+
+	if cfg.SingleGameMode {
+		validateSingleGame(cfg, v, apiClient)
+	} else {
+		validateMultipleGames(cfg, v, apiClient, db)
+	}
 }
