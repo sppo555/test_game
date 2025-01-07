@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	
 	"github.com/letron/verify/internal/validator"
 	"github.com/letron/verify/internal/config"
@@ -38,10 +37,10 @@ func main() {
 		return
 	}
 
-	// 儲存驗證結果
-	var results []validator.ValidationResult
+	// 驗證所有遊戲
+	var totalResult validator.ValidationResult
+	totalResult.TotalGames = len(gameIDs)
 
-	// 遍歷每個 game_id，進行驗證
 	for _, gameID := range gameIDs {
 		fmt.Printf("\n=== Game ID: %s ===\n", gameID)
 		
@@ -61,31 +60,29 @@ func main() {
 		}
 
 		// 驗證遊戲
-		validationResult := v.ValidateGame(gameDetails)
-		results = append(results, validationResult)
-
-		// 輸出驗證結果
-		if validationResult.IsValid {
-			fmt.Printf("\nValidation Result: Valid \n")
+		result := v.ValidateGame(gameDetails)
+		
+		// 更新總結果
+		if len(result.InvalidGameIDs) > 0 {
+			totalResult.InvalidGames++
+			totalResult.InvalidGameIDs = append(totalResult.InvalidGameIDs, result.InvalidGameIDs...)
+			totalResult.ErrorDetails = append(totalResult.ErrorDetails, result.ErrorDetails...)
 		} else {
-			fmt.Printf("\nValidation Result: Invalid \n")
-			for _, errMsg := range validationResult.Errors {
+			totalResult.ValidGames++
+		}
+
+		// 輸出單個遊戲的驗證結果
+		if len(result.InvalidGameIDs) == 0 {
+			fmt.Printf("\nValidation Result: Valid\n")
+		} else {
+			fmt.Printf("\nValidation Result: Invalid\n")
+			for _, errMsg := range result.ErrorDetails {
 				fmt.Printf("Error: %s\n", errMsg)
 			}
 		}
-		fmt.Println(strings.Repeat("-", 50))
+		fmt.Println("--------------------------------------------------")
 	}
 
-	// 總結驗證結果
-	var invalidCount int
-	for _, res := range results {
-		if !res.IsValid {
-			invalidCount++
-		}
-	}
-
-	fmt.Printf("\nValidation Summary:\n")
-	fmt.Printf("Total games: %d\n", len(results))
-	fmt.Printf("Valid games: %d\n", len(results)-invalidCount)
-	fmt.Printf("Invalid games: %d\n", invalidCount)
+	// 輸出總結果
+	fmt.Println(totalResult.String())
 }
