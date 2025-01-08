@@ -72,13 +72,23 @@ func TestNeedThirdCard(t *testing.T) {
 		{0, 9, false},
 		{9, 9, false},
 
-		// 閒家 <= 5 => true
+		// 閒家 <=5 => true
 		{0, 0, true},
 		{5, 5, true},
 
-		// 閒家 6,7 => false
-		{6, 2, false},
-		{7, 2, false},
+		// 閒家 6,7 且莊家 6,7,8,9 => false
+		{6, 6, false},
+		{7, 7, false},
+		{6, 8, false},
+		{7, 9, false},
+
+		// 閒家 6,7 且莊家 0-5 => true（莊家必須補牌）
+		{6, 0, true},
+		{7, 1, true},
+		{6, 2, true},
+		{7, 3, true},
+		{6, 4, true},
+		{7, 5, true},
 	}
 
 	for _, tt := range tests {
@@ -495,6 +505,174 @@ func TestBankerMustDrawButNotDraw(t *testing.T) {
 			// 輸出詳細的遊戲狀態，幫助調試
 			t.Logf("Game state - Player: %v (%d), Banker: %v (%d)", 
 				g.PlayerHand.Cards, g.PlayerScore, 
+				g.BankerHand.Cards, g.BankerScore)
+		})
+	}
+}
+
+// TestBankerMustDrawWhenScoreIs0to2 測試莊家點數為0-2時必須補牌
+func TestBankerMustDrawWhenScoreIs0to2(t *testing.T) {
+	tests := []struct {
+		name           string
+		playerCards    []Card
+		bankerCards   []Card
+		bankerThirdCard Card  // 新增：莊家第三張牌
+		expectedDraw   bool
+		expectedScore int
+	}{
+		{
+			name: "莊家點數為0時必須補牌",
+			playerCards: []Card{
+				{Value: 4, Suit: 1}, // D4
+				{Value: 3, Suit: 2}, // C3
+			}, // 閒家7點，不補牌
+			bankerCards: []Card{
+				{Value: 3, Suit: 0}, // S3
+				{Value: 7, Suit: 1}, // D7
+			}, // 莊家0點，必須補牌
+			bankerThirdCard: Card{Value: 5, Suit: 3}, // C5
+			expectedDraw: true,
+			expectedScore: 0,
+		},
+		{
+			name: "莊家點數為2時必須補牌",
+			playerCards: []Card{
+				{Value: 9, Suit: 2}, // H9
+				{Value: 8, Suit: 0}, // S8
+			}, // 閒家7點，不補牌
+			bankerCards: []Card{
+				{Value: 13, Suit: 2}, // HK
+				{Value: 2, Suit: 1},  // D2
+			}, // 莊家2點，必須補牌
+			bankerThirdCard: Card{Value: 4, Suit: 3}, // C4
+			expectedDraw: true,
+			expectedScore: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 創建一個新遊戲
+			g := NewGame()
+
+			// 使用測試牌替換真實的牌組
+			allCards := append(tt.playerCards, tt.bankerCards...)
+			allCards = append(allCards, tt.bankerThirdCard) // 添加莊家第三張牌
+			mockDeck := &MockDeck{
+				Cards: allCards,
+			}
+			g.Deck = mockDeck
+
+			// 發牌
+			g.Deal()
+			g.calculateScores()
+
+			// 驗證莊家初始點數
+			if g.BankerScore != tt.expectedScore {
+				t.Errorf("莊家初始點數錯誤，期望 %d，得到 %d", tt.expectedScore, g.BankerScore)
+			}
+
+			// 驗證閒家不是天牌
+			if g.PlayerScore >= 8 {
+				t.Errorf("閒家不應該是天牌，但得到點數 %d", g.PlayerScore)
+			}
+
+			// 補牌
+			g.DealThirdCard()
+
+			// 驗證莊家是否有補牌
+			if tt.expectedDraw && len(g.BankerHand.Cards) != 3 {
+				t.Errorf("莊家點數為 %d 時應該補牌，但沒有補牌", tt.expectedScore)
+			}
+
+			// 輸出遊戲狀態以便調試
+			t.Logf("Game state - Player: %v (%d), Banker: %v (%d)",
+				g.PlayerHand.Cards, g.PlayerScore,
+				g.BankerHand.Cards, g.BankerScore)
+		})
+	}
+}
+
+// TestBankerMustDrawWhenPlayerStands 測試當閒家不補牌時（6或7點），莊家點數0-5必須補牌的情況
+func TestBankerMustDrawWhenPlayerStands(t *testing.T) {
+	tests := []struct {
+		name           string
+		playerCards    []Card
+		bankerCards   []Card
+		bankerThirdCard Card
+		expectedDraw   bool
+		expectedScore int
+	}{
+		{
+			name: "閒家6點不補牌，莊家1點必須補牌",
+			playerCards: []Card{
+				{Value: 13, Suit: 1}, // DK
+				{Value: 6, Suit: 0},  // S6
+			}, // 閒家6點，不補牌
+			bankerCards: []Card{
+				{Value: 7, Suit: 0}, // S7
+				{Value: 4, Suit: 0}, // S4
+			}, // 莊家1點，必須補牌
+			bankerThirdCard: Card{Value: 5, Suit: 3}, // C5
+			expectedDraw: true,
+			expectedScore: 1,
+		},
+		{
+			name: "閒家7點不補牌，莊家5點必須補牌",
+			playerCards: []Card{
+				{Value: 3, Suit: 1}, // D3
+				{Value: 4, Suit: 0}, // S4
+			}, // 閒家7點，不補牌
+			bankerCards: []Card{
+				{Value: 2, Suit: 0}, // S2
+				{Value: 3, Suit: 0}, // S3
+			}, // 莊家5點，必須補牌
+			bankerThirdCard: Card{Value: 6, Suit: 3}, // C6
+			expectedDraw: true,
+			expectedScore: 5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 創建一個新遊戲
+			g := NewGame()
+
+			// 使用測試牌替換真實的牌組
+			allCards := append(tt.playerCards, tt.bankerCards...)
+			allCards = append(allCards, tt.bankerThirdCard)
+			mockDeck := &MockDeck{
+				Cards: allCards,
+			}
+			g.Deck = mockDeck
+
+			// 發牌
+			g.Deal()
+			g.calculateScores()
+
+			// 驗證莊家初始點數
+			if g.BankerScore != tt.expectedScore {
+				t.Errorf("莊家初始點數錯誤，期望 %d，得到 %d", tt.expectedScore, g.BankerScore)
+			}
+
+			// 驗證閒家不是天牌且不需要補牌（6或7點）
+			if g.PlayerScore < 6 || g.PlayerScore > 7 {
+				t.Errorf("閒家點數應該是6或7點，但得到點數 %d", g.PlayerScore)
+			}
+
+			// 補牌
+			if g.NeedThirdCard() {
+				g.DealThirdCard()
+			}
+
+			// 驗證莊家是否有補牌
+			if tt.expectedDraw && len(g.BankerHand.Cards) != 3 {
+				t.Errorf("莊家點數為 %d 時應該補牌，但沒有補牌", tt.expectedScore)
+			}
+
+			// 輸出遊戲狀態以便調試
+			t.Logf("Game state - Player: %v (%d), Banker: %v (%d)",
+				g.PlayerHand.Cards, g.PlayerScore,
 				g.BankerHand.Cards, g.BankerScore)
 		})
 	}

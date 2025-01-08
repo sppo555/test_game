@@ -72,6 +72,11 @@ func (g *Game) NeedThirdCard() bool {
 		return true
 	}
 
+	// 莊家補牌規則：當閒家不補牌時（6或7點），莊家點數0-5必須補牌
+	if g.PlayerScore >= 6 && g.PlayerScore <= 7 && g.BankerScore <= 5 {
+		return true
+	}
+
 	return false
 }
 
@@ -88,6 +93,8 @@ func (g *Game) DealThirdCard() {
         g.PlayerHand.Cards = append(g.PlayerHand.Cards, playerThirdCard)
         g.PlayerThirdValue = playerThirdCard.GetCardValue()
         g.calculateScores() // 重新計算閒家點數
+    } else {
+        g.PlayerThirdValue = -1 // 閒家不補牌時，設置為-1
     }
 
     // 莊家補牌規則
@@ -98,6 +105,8 @@ func (g *Game) DealThirdCard() {
             g.BankerHand.Cards = append(g.BankerHand.Cards, bankerThirdCard)
             g.BankerThirdValue = bankerThirdCard.GetCardValue()
             g.calculateScores()
+        } else {
+            g.BankerThirdValue = -1 // 莊家不補牌時，設置為-1
         }
     } else {
         // 閒家補牌後，根據閒家補牌點數和莊家點數決定是否補牌
@@ -106,6 +115,8 @@ func (g *Game) DealThirdCard() {
             g.BankerHand.Cards = append(g.BankerHand.Cards, bankerThirdCard)
             g.BankerThirdValue = bankerThirdCard.GetCardValue()
             g.calculateScores()
+        } else {
+            g.BankerThirdValue = -1 // 莊家不補牌時，設置為-1
         }
     }
 }
