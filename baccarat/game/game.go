@@ -11,7 +11,7 @@ type Hand struct {
 
 // Game 代表百家樂遊戲
 type Game struct {
-	Deck         *Deck
+	Deck         DeckInterface
 	PlayerHand   Hand
 	BankerHand   Hand
 	PlayerScore  int
@@ -73,25 +73,56 @@ func (g *Game) NeedThirdCard() bool {
 
 // DealThirdCard 發第三張牌
 func (g *Game) DealThirdCard() {
+    // 如果任一方為天牌（8或9點），不補牌
+    if g.PlayerScore >= 8 || g.BankerScore >= 8 {
+        return
+    }
+
+    var playerThirdValue int = -1 // 用-1表示閒家沒有補牌
+
+    // 閒家補牌規則：點數為0-5時補牌
     if g.PlayerScore <= 5 {
         playerThirdCard := g.Deck.DrawCard()
         g.PlayerHand.Cards = append(g.PlayerHand.Cards, playerThirdCard)
-        g.calculateScores()
+        playerThirdValue = playerThirdCard.GetCardValue()
+        g.calculateScores() // 重新計算閒家點數
+    }
 
-        // 如果閒家補牌後不是天牌(8,9點)，才考慮莊家補牌
-        if g.PlayerScore < 8 {
-            playerThirdValue := playerThirdCard.GetCardValue()
-            if g.shouldBankerDrawThird(playerThirdValue) {
-                g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
-                g.calculateScores()
-            }
+    // 莊家補牌規則
+    if playerThirdValue == -1 {
+        // 閒家沒補牌時，莊家點數0-5補牌
+        if g.BankerScore <= 5 {
+            g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
+            g.calculateScores()
         }
-    } else if g.BankerScore <= 5 { // 閒家不補牌，莊家點數<=5時補牌
-        g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
-        g.calculateScores()
+    } else {
+        // 閒家補牌後，根據閒家補牌點數和莊家點數決定是否補牌
+        if g.shouldBankerDrawThird(playerThirdValue) {
+            g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
+            g.calculateScores()
+        }
     }
 }
 
+/*
+莊家補牌規則表：
++----------------+------------------------------------------+
+| 莊家點數        | 閒家第三張牌點數                          |
++----------------+------------------------------------------+
+| 0, 1, 2       | 補牌（不看閒家第三張）                     |
+| 3             | 補牌，除非閒家第三張是 8                    |
+| 4             | 當閒家第三張是 2-7 時補牌                   |
+| 5             | 當閒家第三張是 4-7 時補牌                   |
+| 6             | 當閒家第三張是 6-7 時補牌                   |
+| 7             | 不補牌（不看閒家第三張）                     |
+| 8, 9         | 天牌，不補牌（不看閒家第三張）                |
++----------------+------------------------------------------+
+注意：
+1. 如果閒家沒有補第三張牌，則莊家只看自己的點數：
+   - 點數 0-5：補牌
+   - 點數 6-9：不補牌
+2. 表中未提到的情況都不補牌
+*/
 // shouldBankerDrawThird 判斷莊家是否需要補第三張牌
 func (g *Game) shouldBankerDrawThird(playerThirdValue int) bool {
 	switch g.BankerScore {
@@ -112,30 +143,33 @@ func (g *Game) shouldBankerDrawThird(playerThirdValue int) bool {
 
 // DetermineWinner 判斷勝負
 func (g *Game) DetermineWinner() {
-	// 先判斷勝負
-	if g.PlayerScore > g.BankerScore {
-		g.Winner = "Player"
-	} else if g.BankerScore > g.PlayerScore {
-		g.Winner = "Banker"
-	} else {
-		g.Winner = "Tie"
-	}
+    // 先判斷勝負
+    if g.PlayerScore > g.BankerScore {
+        g.Winner = "Player"
+        g.IsLuckySix = false
+        g.LuckySixType = ""
+    } else if g.BankerScore > g.PlayerScore {
+        g.Winner = "Banker"
+        // 判斷幸運6（只有莊家贏且點數為6時才是幸運6）
+        if g.BankerScore == 6 {
+            g.IsLuckySix = true
+            if len(g.BankerHand.Cards) == 2 {
+                g.LuckySixType = "2cards"
+            } else {
+                g.LuckySixType = "3cards"
+            }
+        } else {
+            g.IsLuckySix = false
+            g.LuckySixType = ""
+        }
+    } else {
+        g.Winner = "Tie"
+        g.IsLuckySix = false
+        g.LuckySixType = ""
+    }
 
-	// 再判斷幸運6（只有莊家贏且點數為6時才可能是幸運6）
-	if g.Winner == "Banker" && g.BankerScore == 6 {
-		g.IsLuckySix = true
-		if len(g.BankerHand.Cards) == 2 {
-			g.LuckySixType = "2cards"
-		} else {
-			g.LuckySixType = "3cards"
-		}
-	} else {
-		g.IsLuckySix = false
-		g.LuckySixType = ""
-	}
-
-	// 計算賠率
-	g.CalculatePayouts()
+    // 計算賠率
+    g.CalculatePayouts()
 }
 
 // CalculatePayouts 計算賠率

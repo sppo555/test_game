@@ -15,6 +15,13 @@ const (
 	Clubs
 )
 
+// DeckInterface 代表牌組接口
+type DeckInterface interface {
+	DrawCard() Card
+	Shuffle()
+	GetCards() []Card
+}
+
 // Card 代表一張撲克牌
 type Card struct {
 	Suit  Suit
@@ -55,6 +62,11 @@ func (d *Deck) DrawCard() Card {
 	card := d.Cards[0]
 	d.Cards = d.Cards[1:]
 	return card
+}
+
+// GetCards 獲取牌組
+func (d *Deck) GetCards() []Card {
+	return d.Cards
 }
 
 // GetCardValue 獲取牌面點數（百家樂規則）

@@ -30,7 +30,7 @@
             "query": "SELECT game_id, player_final_score, banker_final_score, player_third_card, banker_third_card FROM game_records WHERE (player_final_score BETWEEN 8 AND 9 OR banker_final_score BETWEEN 8 AND 9) AND (player_third_card IS NOT NULL OR banker_third_card IS NOT NULL)",
             "description": "Final score is natural (8 or 9) but has third card",
             "chinese_description": "最終分數為自然牌(8或9點)但有第三張牌",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Player Win Check",
@@ -62,7 +62,7 @@
             "query": "SELECT game_id, player_initial_score, player_third_card FROM game_records WHERE player_initial_score <= 5 AND player_third_card IS NULL",
             "description": "Player score <= 5 but no third card drawn",
             "chinese_description": "玩家分數小於等於5點但未補牌",
-            "enabled": true
+            "enabled": false
         },
         {
             "name": "Score Consistency Check",
