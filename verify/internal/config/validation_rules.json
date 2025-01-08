@@ -3,7 +3,7 @@
         {
             "name": "Lucky Six Rule Check",
             "chinese_name": "幸運六規則檢查",
-            "query": "SELECT game_id, winner, banker_final_score, is_lucky_six FROM game_records WHERE banker_final_score = 6 AND winner != 'Banker' AND is_lucky_six = 1",
+            "query": "SELECT game_id, winner, banker_final_score, is_lucky_six FROM game_records WHERE is_lucky_six = 1 AND (winner != 'Banker' OR banker_final_score != 6)",
             "description": "Lucky Six is marked but winner is not Banker with score 6",
             "chinese_description": "標記了幸運六但贏家不是莊家或莊家分數不是6點",
             "enabled": true
