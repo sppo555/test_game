@@ -161,6 +161,38 @@
             "enabled": true
         },
         {
+            "name": "Banker Draw Rule Score 3",
+            "chinese_name": "莊家補牌規則（莊3點）",
+            "query": "SELECT game_id FROM game_records WHERE banker_initial_score = 3 AND player_third_card IS NOT NULL AND ((player_third_value = 8 AND banker_third_card IS NOT NULL) OR (player_third_value != 8 AND banker_third_card IS NULL))",
+            "description": "Invalid banker draw on score 3: drew on player's 8 or didn't draw on other cards",
+            "chinese_description": "莊家3點時出錯：閒家補8時補了牌，或閒家補其他點數時沒補牌",
+            "enabled": true
+        },
+        {
+            "name": "Banker Draw Rule Score 4",
+            "chinese_name": "莊家補牌規則（莊4點）",
+            "query": "SELECT game_id FROM game_records WHERE banker_initial_score = 4 AND player_third_card IS NOT NULL AND ((player_third_value IN (0,1,8,9) AND banker_third_card IS NOT NULL) OR (player_third_value NOT IN (0,1,8,9) AND banker_third_card IS NULL))",
+            "description": "Invalid banker draw on score 4: drew on player's 0,1,8,9 or didn't draw on other cards",
+            "chinese_description": "莊家4點時出錯：閒家補0,1,8,9時補了牌，或閒家補其他點數時沒補牌",
+            "enabled": true
+        },
+        {
+            "name": "Banker Draw Rule Score 5",
+            "chinese_name": "莊家補牌規則（莊5點）",
+            "query": "SELECT game_id FROM game_records WHERE banker_initial_score = 5 AND player_third_card IS NOT NULL AND ((player_third_value IN (0,1,2,3,8,9) AND banker_third_card IS NOT NULL) OR (player_third_value NOT IN (0,1,2,3,8,9) AND banker_third_card IS NULL))",
+            "description": "Invalid banker draw on score 5: drew on player's 0,1,2,3,8,9 or didn't draw on other cards",
+            "chinese_description": "莊家5點時出錯：閒家補0,1,2,3,8,9時補了牌，或閒家補其他點數時沒補牌",
+            "enabled": true
+        },
+        {
+            "name": "Banker Draw Rule Score 6",
+            "chinese_name": "莊家補牌規則（莊6點）",
+            "query": "SELECT game_id FROM game_records WHERE banker_initial_score = 6 AND player_third_card IS NOT NULL AND ((player_third_value IN (6,7) AND banker_third_card IS NULL) OR (player_third_value NOT IN (6,7) AND banker_third_card IS NOT NULL))",
+            "description": "Invalid banker draw on score 6: didn't draw on player's 6,7 or drew on other cards",
+            "chinese_description": "莊家6點時出錯：閒家補6,7時沒補牌，或閒家補其他點數時卻補了牌",
+            "enabled": true
+        },
+        {
             "name": "Duplicate Card Check",
             "chinese_name": "重複牌檢查",
             "query": "SELECT game_id FROM game_records WHERE (SUBSTRING_INDEX(player_initial_cards, ',', 1) = SUBSTRING_INDEX(player_initial_cards, ',', -1) OR player_initial_cards = banker_initial_cards OR (player_third_card IS NOT NULL AND (player_third_card = SUBSTRING_INDEX(player_initial_cards, ',', 1) OR player_third_card = SUBSTRING_INDEX(player_initial_cards, ',', -1) OR player_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', 1) OR player_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', -1))) OR (banker_third_card IS NOT NULL AND (banker_third_card = SUBSTRING_INDEX(player_initial_cards, ',', 1) OR banker_third_card = SUBSTRING_INDEX(player_initial_cards, ',', -1) OR banker_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', 1) OR banker_third_card = SUBSTRING_INDEX(banker_initial_cards, ',', -1) OR (player_third_card IS NOT NULL AND banker_third_card = player_third_card))))",
