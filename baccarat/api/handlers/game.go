@@ -302,16 +302,26 @@ func saveGameRecord(tx *sql.Tx, g *game.Game, gameID string, payouts map[string]
 
 	// 處理第三張牌
 	var playerThirdCard, bankerThirdCard sql.NullString
+	var playerThirdValue, bankerThirdValue sql.NullInt64
+
 	if len(playerHand) > 2 {
 		playerThirdCard = sql.NullString{
 			String: formatCard(playerHand[2]),
 			Valid:  true,
+		}
+		playerThirdValue = sql.NullInt64{
+			Int64: int64(g.GetPlayerThirdValue()),
+			Valid: true,
 		}
 	}
 	if len(bankerHand) > 2 {
 		bankerThirdCard = sql.NullString{
 			String: formatCard(bankerHand[2]),
 			Valid:  true,
+		}
+		bankerThirdValue = sql.NullInt64{
+			Int64: int64(g.GetBankerThirdValue()),
+			Valid: true,
 		}
 	}
 
@@ -333,6 +343,8 @@ func saveGameRecord(tx *sql.Tx, g *game.Game, gameID string, payouts map[string]
 		g.GetBankerInitialScore(),  // 新增：保存莊家初始點數
 		playerThirdCard,
 		bankerThirdCard,
+		playerThirdValue,     // 新增：保存閒家第三張牌點數
+		bankerThirdValue,     // 新增：保存莊家第三張牌點數
 		g.GetPlayerScore(),
 		g.GetBankerScore(),
 		g.GetWinner(),

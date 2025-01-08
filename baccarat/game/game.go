@@ -11,15 +11,17 @@ type Hand struct {
 
 // Game 代表百家樂遊戲
 type Game struct {
-	Deck         DeckInterface
-	PlayerHand   Hand
-	BankerHand   Hand
-	PlayerScore  int
-	BankerScore  int
-	Winner       string
-	IsLuckySix   bool
-	LuckySixType string             // "2cards" 或 "3cards"
-	Payouts      map[string]float64 // 各種投注的賠率
+	Deck             DeckInterface
+	PlayerHand       Hand
+	BankerHand       Hand
+	PlayerScore      int
+	BankerScore      int
+	Winner           string
+	IsLuckySix       bool
+	LuckySixType     string             // "2cards" 或 "3cards"
+	PlayerThirdValue int                // 閒家第三張牌點數，-1 表示沒有補牌
+	BankerThirdValue int                // 莊家第三張牌點數，-1 表示沒有補牌
+	Payouts          map[string]float64 // 各種投注的賠率
 }
 
 // NewGame 創建新遊戲
@@ -27,8 +29,10 @@ func NewGame() *Game {
 	deck := NewDeck()
 	deck.Shuffle()
 	return &Game{
-		Deck:    deck,
-		Payouts: make(map[string]float64),
+		Deck:             deck,
+		PlayerThirdValue: -1,
+		BankerThirdValue: -1,
+		Payouts:          make(map[string]float64),
 	}
 }
 
@@ -63,7 +67,7 @@ func (g *Game) NeedThirdCard() bool {
 		return false
 	}
 
-	// 閒家補牌規則
+	// 閒家補牌規則：點數為0-5時補牌
 	if g.PlayerScore <= 5 {
 		return true
 	}
@@ -78,27 +82,29 @@ func (g *Game) DealThirdCard() {
         return
     }
 
-    var playerThirdValue int = -1 // 用-1表示閒家沒有補牌
-
     // 閒家補牌規則：點數為0-5時補牌
     if g.PlayerScore <= 5 {
         playerThirdCard := g.Deck.DrawCard()
         g.PlayerHand.Cards = append(g.PlayerHand.Cards, playerThirdCard)
-        playerThirdValue = playerThirdCard.GetCardValue()
+        g.PlayerThirdValue = playerThirdCard.GetCardValue()
         g.calculateScores() // 重新計算閒家點數
     }
 
     // 莊家補牌規則
-    if playerThirdValue == -1 {
+    if g.PlayerThirdValue == -1 {
         // 閒家沒補牌時，莊家點數0-5補牌
         if g.BankerScore <= 5 {
-            g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
+            bankerThirdCard := g.Deck.DrawCard()
+            g.BankerHand.Cards = append(g.BankerHand.Cards, bankerThirdCard)
+            g.BankerThirdValue = bankerThirdCard.GetCardValue()
             g.calculateScores()
         }
     } else {
         // 閒家補牌後，根據閒家補牌點數和莊家點數決定是否補牌
-        if g.shouldBankerDrawThird(playerThirdValue) {
-            g.BankerHand.Cards = append(g.BankerHand.Cards, g.Deck.DrawCard())
+        if g.shouldBankerDrawThird(g.PlayerThirdValue) {
+            bankerThirdCard := g.Deck.DrawCard()
+            g.BankerHand.Cards = append(g.BankerHand.Cards, bankerThirdCard)
+            g.BankerThirdValue = bankerThirdCard.GetCardValue()
             g.calculateScores()
         }
     }
@@ -216,11 +222,14 @@ func (g *Game) CalculatePayouts() {
 
 // Play 進行一局遊戲
 func (g *Game) Play() {
+	// 重置第三張牌點數
+	g.PlayerThirdValue = -1
+	g.BankerThirdValue = -1
+
 	g.Deal()
-	if g.NeedThirdCard() {
-		g.DealThirdCard()
-	}
+	g.DealThirdCard() // 直接調用補牌邏輯，內部會判斷是否需要補牌
 	g.DetermineWinner()
+	g.CalculatePayouts()
 }
 
 // GetPlayerHand 获取闲家手牌
@@ -376,4 +385,14 @@ func (g *Game) GetBankerInitialScore() int {
         score = (score + g.BankerHand.Cards[i].GetCardValue()) % 10
     }
     return score
+}
+
+// GetPlayerThirdValue 獲取閒家第三張牌點數，-1 表示沒有補牌
+func (g *Game) GetPlayerThirdValue() int {
+	return g.PlayerThirdValue
+}
+
+// GetBankerThirdValue 獲取莊家第三張牌點數，-1 表示沒有補牌
+func (g *Game) GetBankerThirdValue() int {
+	return g.BankerThirdValue
 }

@@ -74,6 +74,7 @@ func Transaction(fn func(*sql.Tx) error) error {
 func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string,
 	playerInitialScore, bankerInitialScore int,
 	playerThirdCard, bankerThirdCard sql.NullString,
+	playerThirdValue, bankerThirdValue sql.NullInt64,
 	playerFinalScore, bankerFinalScore int,
 	winner string, isLuckySix bool,
 	luckySixType sql.NullString,
@@ -85,11 +86,12 @@ func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string
 				game_id, player_initial_cards, banker_initial_cards,
 				player_initial_score, banker_initial_score,
 				player_third_card, banker_third_card,
+				player_third_value, banker_third_value,
 				player_final_score, banker_final_score,
 				winner, is_lucky_six, lucky_six_type,
 				player_payout, banker_payout, tie_payout, lucky_six_payout,
 				total_bets, total_payouts
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 
 		var playerPayout, bankerPayout, tiePayout, luckySixPayout sql.NullFloat64
@@ -131,6 +133,7 @@ func SaveGameRecord(gameID string, playerInitialCards, bankerInitialCards string
 			gameID, playerInitialCards, bankerInitialCards,
 			playerInitialScore, bankerInitialScore,
 			playerThirdCard, bankerThirdCard,
+			playerThirdValue, bankerThirdValue,
 			playerFinalScore, bankerFinalScore,
 			winner, isLuckySix, luckySixType,
 			playerPayout, bankerPayout, tiePayout, luckySixPayout,
@@ -208,6 +211,8 @@ type GameResult struct {
 	BankerCards        string         `json:"banker_cards"`
 	PlayerThirdCard    sql.NullString `json:"player_third_card"`
 	BankerThirdCard    sql.NullString `json:"banker_third_card"`
+	PlayerThirdValue   sql.NullInt64  `json:"player_third_value"`
+	BankerThirdValue   sql.NullInt64  `json:"banker_third_value"`
 	PlayerPayout       sql.NullFloat64 `json:"player_payout"`
 	BankerPayout       sql.NullFloat64 `json:"banker_payout"`
 	TiePayout          sql.NullFloat64 `json:"tie_payout"`
@@ -242,6 +247,8 @@ func GetGameDetails(gameID string) (*GameResult, error) {
 			banker_initial_cards,
 			player_third_card,
 			banker_third_card,
+			player_third_value,
+			banker_third_value,
 			player_payout,
 			banker_payout,
 			tie_payout,
@@ -263,6 +270,8 @@ func GetGameDetails(gameID string) (*GameResult, error) {
 		&result.BankerCards,
 		&result.PlayerThirdCard,
 		&result.BankerThirdCard,
+		&result.PlayerThirdValue,
+		&result.BankerThirdValue,
 		&result.PlayerPayout,
 		&result.BankerPayout,
 		&result.TiePayout,
