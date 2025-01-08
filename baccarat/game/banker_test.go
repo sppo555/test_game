@@ -408,3 +408,94 @@ func TestPlayerThirdTo8or9(t *testing.T) {
 		})
 	}
 }
+
+// TestBankerMustDrawButNotDraw 測試莊家該補牌卻沒有補牌的情況
+func TestBankerMustDrawButNotDraw(t *testing.T) {
+	tests := []struct {
+		name           string
+		playerCards    []Card
+		bankerCards    []Card
+		playerThird    *Card    // 閒家第三張牌，nil 表示不補牌
+		bankerMustDraw bool     // 莊家是否必須補牌
+		bankerThird    Card     // 莊家的第三張牌
+	}{
+		{
+			name: "閒家6點不補牌，莊家2點必須補牌",
+			playerCards: []Card{
+				{Suit: Hearts, Value: 3},    // ♥3
+				{Suit: Clubs, Value: 3},     // ♣3
+			},
+			bankerCards: []Card{
+				{Suit: Hearts, Value: 1},    // ♥A
+				{Suit: Spades, Value: 1},    // ♠A
+			},
+			playerThird: nil,  // 閒家6點，不補牌
+			bankerMustDraw: true,  // 莊家2點，必須補牌
+			bankerThird: Card{Suit: Diamonds, Value: 3},  // 莊家補3點
+		},
+		{
+			name: "閒家補4點，莊家4點看到4點必須補牌",
+			playerCards: []Card{
+				{Suit: Hearts, Value: 2},    // ♥2
+				{Suit: Clubs, Value: 2},     // ♣2
+			},
+			bankerCards: []Card{
+				{Suit: Hearts, Value: 2},    // ♥2
+				{Suit: Spades, Value: 2},    // ♠2
+			},
+			playerThird: &Card{Suit: Diamonds, Value: 4},  // 閒家補4點
+			bankerMustDraw: true,  // 莊家4點看到4點必須補牌
+			bankerThird: Card{Suit: Hearts, Value: 5},  // 莊家補5點
+		},
+		{
+			name: "閒家補6點，莊家6點看到6點必須補牌",
+			playerCards: []Card{
+				{Suit: Hearts, Value: 2},    // ♥2
+				{Suit: Clubs, Value: 3},     // ♣3
+			},
+			bankerCards: []Card{
+				{Suit: Hearts, Value: 3},    // ♥3
+				{Suit: Spades, Value: 3},    // ♠3
+			},
+			playerThird: &Card{Suit: Diamonds, Value: 6},  // 閒家補6點
+			bankerMustDraw: true,  // 莊家6點看到6點必須補牌
+			bankerThird: Card{Suit: Clubs, Value: 4},  // 莊家補4點
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 準備牌組
+			cards := append([]Card{}, tt.playerCards...)
+			cards = append(cards, tt.bankerCards...)
+			if tt.playerThird != nil {
+				cards = append(cards, *tt.playerThird)
+			}
+			if tt.bankerMustDraw {
+				cards = append(cards, tt.bankerThird)
+			}
+			
+			mockDeck := &MockDeck{
+				Cards: cards,
+			}
+
+			g := &Game{
+				Deck:    mockDeck,
+				Payouts: make(map[string]float64),
+			}
+
+			g.Play()
+
+			// 檢查莊家是否有補牌
+			if tt.bankerMustDraw && len(g.BankerHand.Cards) != 3 {
+				t.Errorf("%s: Banker must draw third card but didn't. Banker cards: %v, score: %d", 
+					tt.name, g.BankerHand.Cards, g.BankerScore)
+			}
+
+			// 輸出詳細的遊戲狀態，幫助調試
+			t.Logf("Game state - Player: %v (%d), Banker: %v (%d)", 
+				g.PlayerHand.Cards, g.PlayerScore, 
+				g.BankerHand.Cards, g.BankerScore)
+		})
+	}
+}
