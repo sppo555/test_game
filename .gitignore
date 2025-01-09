@@ -1,0 +1,3 @@
+# 忽略環境變數文件
+verify/.env
+baccarat/.env
