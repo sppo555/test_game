@@ -178,8 +178,14 @@ func ValidateGames(db *sql.DB, rules *ValidationRules) (*ValidationResults, erro
 }
 
 func (v *SQLVerifier) VerifyGames() error {
+	// 從環境變數讀取驗證規則文件路徑
+	rulesPath := os.Getenv("VALIDATION_RULES_PATH")
+	if rulesPath == "" {
+		return fmt.Errorf("VALIDATION_RULES_PATH environment variable is not set")
+	}
+
 	// 加載驗證規則
-	rules, err := LoadValidationRules("internal/config/validation_rules.json")
+	rules, err := LoadValidationRules(rulesPath)
 	if err != nil {
 		return fmt.Errorf("加載驗證規則失敗: %v", err)
 	}
