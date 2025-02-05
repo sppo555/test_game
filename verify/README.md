@@ -30,8 +30,8 @@
 
 ```bash
 # 1. 克隆存儲庫
-git clone https://github.com/your-org/game-validator.git
-cd game-validator
+git clone https://github.com/sppo555/test_game.git
+cd test_game/verify
 
 # 2. 初始化環境
 cp .env.example .env
