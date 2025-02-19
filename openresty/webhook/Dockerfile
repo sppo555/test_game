@@ -1,25 +1,39 @@
-FROM golang:1.19-alpine
+# Build stage
+FROM golang:1.20-alpine AS builder
+
+# 安裝編譯工具
+RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /app
-
-# 安裝必要的系統依賴
-RUN apk add --no-cache curl
-
-# 複製源代碼
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
+RUN go mod tidy
+RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
-# 編譯應用
-RUN go build -o webhook
+# Final stage
+FROM alpine:latest
 
-# 設置執行權限
-RUN chmod +x webhook
+# 安裝必要的運行時依賴
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    && update-ca-certificates
 
-# 暴露端口
-EXPOSE 8080
+# 設置時區
+ENV TZ=Asia/Taipei
 
-# 健康檢查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+WORKDIR /app
+COPY --from=builder /app/main .
 
-# 運行應用
-CMD ["./webhook", "-port", "8080"]
+# 設置環境變量
+ENV PORT=8081
+ENV JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+
+EXPOSE 8081
+
+# 使用非 root 用戶運行
+RUN adduser -D appuser
+USER appuser
+
+CMD ["./main"]

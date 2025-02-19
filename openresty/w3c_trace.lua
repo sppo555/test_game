@@ -17,6 +17,7 @@ local PARENT_ID_LENGTH = 16
 local ngx_log = ngx.log
 local ngx_ERR = ngx.ERR
 local ngx_DEBUG = ngx.DEBUG
+local ngx_INFO = ngx.INFO
 
 -- 基礎配置
 local _config = nil
@@ -128,6 +129,7 @@ function _M.get_trace_context()
     local headers = ngx.req.get_headers()
     local traceparent = headers["traceparent"]
     if traceparent then
+        ngx_log(ngx_INFO, "Found existing traceparent: ", traceparent)
         local parsed, err = _M.parse_traceparent(traceparent)
         if parsed then
             -- 生成新的 parent_id，保持 trace_id
@@ -145,6 +147,11 @@ function _M.get_trace_context()
     if not ctx then
         return nil, "Failed to generate trace context"
     end
+    ngx_log(ngx_INFO, "Generated new trace context: ",
+        "version=", ctx.version,
+        " trace_id=", ctx.trace_id,
+        " parent_id=", ctx.parent_id,
+        " flags=", ctx.flags)
 
     return ctx
 end
@@ -164,6 +171,7 @@ function _M.set_response_headers(ctx)
 
     if is_valid_traceparent(traceparent) then
         ngx.header["traceparent"] = traceparent
+        ngx_log(ngx_INFO, "Set response traceparent: ", traceparent)
     else
         ngx_log(ngx_ERR, "Generated invalid traceparent: ", traceparent)
     end
