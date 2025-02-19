@@ -21,18 +21,18 @@ services:
     #   timeout: 10s
     #   retries: 3
 
-  webhook:
-    build:
-      context: ./webhook
-      dockerfile: Dockerfile
-    container_name: webhook
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./webhook/logs:/app/logs
-    environment:
-      - LOG_LEVEL=info
-      - METRICS_RETENTION=24h
+  # webhook:
+  #   build:
+  #     context: ./webhook
+  #     dockerfile: Dockerfile
+  #   container_name: webhook
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - ./webhook/logs:/app/logs
+  #   environment:
+  #     - LOG_LEVEL=info
+  #     - METRICS_RETENTION=24h
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
     #   interval: 30s
