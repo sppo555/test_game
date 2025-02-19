@@ -13,6 +13,8 @@ local cjson = require "cjson.safe"
 local TRACEPARENT_PATTERN = "^(%d%d)%-([a-f0-9]+)%-([a-f0-9]+)%-(%d%d)$"
 local DEFAULT_VERSION = "00"
 local DEFAULT_FLAGS = "01"
+local TRACE_ID_LENGTH = 32
+local PARENT_ID_LENGTH = 16
 
 -- ngx API 本地化
 local ngx_log = ngx.log
@@ -22,34 +24,45 @@ local ngx_INFO = ngx.INFO
 local ngx_WARN = ngx.WARN
 
 -- 基礎配置
-local _config = {
-    enable = (ngx.var.enable_trace_context or "on") == "on",
-    timeout = tonumber(ngx.var.trace_timeout) or 1000,
-    backend_url = ngx.var.trace_backend_url or ngx.var.upstream_url or "http://127.0.0.1:8080",
-    service_name = ngx.var.service_name or "nginx-service",
-    log_level = ngx.var.log_level or "INFO",
-    retry_times = tonumber(ngx.var.trace_retry_times) or 3,
-    retry_delay = tonumber(ngx.var.trace_retry_delay) or 1,
-    batch_size = tonumber(ngx.var.trace_batch_size) or 100,
-    flush_interval = tonumber(ngx.var.trace_flush_interval) or 5,
-    -- 預設關閉監控指標和資料脫敏
-    enable_metrics = (ngx.var.enable_trace_metrics or "off") == "on",
-    enable_sanitization = (ngx.var.enable_trace_sanitization or "off") == "on",
-    -- 可配置脫敏規則
-    sanitization_rules = {
-        auth = (ngx.var.sanitize_auth or "on") == "on",
-        cookie = (ngx.var.sanitize_cookie or "on") == "on",
-        token = (ngx.var.sanitize_token or "on") == "on",
-        custom_fields = ngx.var.sanitize_custom_fields or "" -- 自定義脫敏欄位，以逗號分隔
-    }
-}
+local _config = nil
 
--- 解析自定義脫敏欄位
-local _custom_sanitize_fields = {}
-if _config.sanitization_rules.custom_fields ~= "" then
-    for field in string.gmatch(_config.sanitization_rules.custom_fields, "([^,]+)") do
-        _custom_sanitize_fields[string_lower(field:match("^%s*(.-)%s*$"))] = true
+local function init_config()
+    if _config then
+        return _config
     end
+
+    _config = {
+        enable = (ngx.var.enable_trace_context or "on") == "on",
+        timeout = tonumber(ngx.var.trace_timeout) or 1000,
+        backend_url = ngx.var.trace_backend_url or ngx.var.upstream_url or "http://127.0.0.1:8080",
+        service_name = ngx.var.service_name or "nginx-service",
+        log_level = ngx.var.log_level or "INFO",
+        retry_times = tonumber(ngx.var.trace_retry_times) or 3,
+        retry_delay = tonumber(ngx.var.trace_retry_delay) or 1,
+        batch_size = tonumber(ngx.var.trace_batch_size) or 100,
+        flush_interval = tonumber(ngx.var.trace_flush_interval) or 5,
+        -- 預設關閉監控指標和資料脫敏
+        enable_metrics = (ngx.var.enable_trace_metrics or "off") == "on",
+        enable_sanitization = (ngx.var.enable_trace_sanitization or "off") == "on",
+        -- 可配置脫敏規則
+        sanitization_rules = {
+            auth = (ngx.var.sanitize_auth or "on") == "on",
+            cookie = (ngx.var.sanitize_cookie or "on") == "on",
+            token = (ngx.var.sanitize_token or "on") == "on",
+            custom_fields = ngx.var.sanitize_custom_fields or "" -- 自定義脫敏欄位，以逗號分隔
+        }
+    }
+
+    -- 解析自定義脫敏欄位
+    local _custom_sanitize_fields = {}
+    if _config.sanitization_rules.custom_fields ~= "" then
+        for field in string.gmatch(_config.sanitization_rules.custom_fields, "([^,]+)") do
+            _custom_sanitize_fields[string_lower(field:match("^%s*(.-)%s*$"))] = true
+        end
+    end
+    _config.custom_sanitize_fields = _custom_sanitize_fields
+
+    return _config
 end
 
 -- 批次處理佇列
@@ -68,7 +81,7 @@ local _metrics = {
 
 -- 生成指定長度的隨機十六進制字串
 local function generate_random_hex(len)
-    return string.sub(uuid(), 1, len * 2)
+    return string.sub(string.gsub(uuid(), "-", ""), 1, len)
 end
 
 -- 驗證 traceparent 格式
@@ -83,13 +96,26 @@ local function is_valid_traceparent(traceparent)
         return false
     end
     
+    -- 版本檢查
     if version ~= DEFAULT_VERSION then 
         return false 
     end
-    if string_len(trace_id) ~= 32 then 
+    
+    -- trace_id 不能全為 0
+    if trace_id:match("^0+$") then
+        return false
+    end
+    
+    -- parent_id 不能全為 0
+    if parent_id:match("^0+$") then
+        return false
+    end
+    
+    -- 長度檢查
+    if string_len(trace_id) ~= TRACE_ID_LENGTH then 
         return false 
     end
-    if string_len(parent_id) ~= 16 then 
+    if string_len(parent_id) ~= PARENT_ID_LENGTH then 
         return false 
     end
     if string_len(flags) ~= 2 then 
@@ -102,7 +128,7 @@ end
 -- 解析 traceparent
 function _M.parse_traceparent(traceparent)
     if not is_valid_traceparent(traceparent) then
-        return nil
+        return nil, "Invalid traceparent format"
     end
     
     local version, trace_id, parent_id, flags = string_match(traceparent, TRACEPARENT_PATTERN)
@@ -115,17 +141,83 @@ function _M.parse_traceparent(traceparent)
     }
 end
 
--- 生成新的 traceparent
-function _M.generate_trace_id()
-    local trace_id = generate_random_hex(16)  -- 32字符
-    local parent_id = generate_random_hex(8)  -- 16字符
-    return string_format("%s-%s-%s-%s", DEFAULT_VERSION, trace_id, parent_id, DEFAULT_FLAGS)
+-- 生成新的 trace context
+function _M.generate_trace_context()
+    local trace_id = generate_random_hex(TRACE_ID_LENGTH)
+    local parent_id = generate_random_hex(PARENT_ID_LENGTH)
+    
+    -- 確保生成的 ID 不全為 0
+    if trace_id:match("^0+$") then
+        trace_id = "1" .. string.sub(trace_id, 2)
+    end
+    if parent_id:match("^0+$") then
+        parent_id = "1" .. string.sub(parent_id, 2)
+    end
+    
+    return {
+        version = DEFAULT_VERSION,
+        trace_id = trace_id,
+        parent_id = parent_id,
+        flags = DEFAULT_FLAGS
+    }
+end
+
+-- 獲取或創建 trace context
+function _M.get_trace_context()
+    -- 檢查是否啟用
+    if not init_config().enable then
+        return nil, "Trace context is disabled"
+    end
+
+    -- 檢查請求頭中是否已有 traceparent
+    local headers = ngx.req.get_headers()
+    local traceparent = headers["traceparent"]
+    if traceparent then
+        local parsed, err = _M.parse_traceparent(traceparent)
+        if parsed then
+            -- 生成新的 parent_id，保持 trace_id
+            parsed.parent_id = generate_random_hex(PARENT_ID_LENGTH)
+            if parsed.parent_id:match("^0+$") then
+                parsed.parent_id = "1" .. string.sub(parsed.parent_id, 2)
+            end
+            return parsed
+        end
+        ngx_log(ngx_DEBUG, "Invalid traceparent in request: ", err or "unknown error")
+    end
+
+    -- 如果沒有有效的 traceparent，創建新的
+    local ctx = _M.generate_trace_context()
+    if not ctx then
+        return nil, "Failed to generate trace context"
+    end
+
+    return ctx
+end
+
+-- 設置響應頭
+function _M.set_response_headers(ctx)
+    if not ctx or not ctx.trace_id or not ctx.parent_id then
+        return
+    end
+
+    -- 設置 traceparent 響應頭
+    local traceparent = string_format("%s-%s-%s-%s", 
+        ctx.version or DEFAULT_VERSION, 
+        ctx.trace_id, 
+        ctx.parent_id, 
+        ctx.flags or DEFAULT_FLAGS)
+
+    if is_valid_traceparent(traceparent) then
+        ngx.header["traceparent"] = traceparent
+    else
+        ngx_log(ngx_ERR, "Generated invalid traceparent: ", traceparent)
+    end
 end
 
 -- 資料脫敏（根據配置決定是否執行）
 local function sanitize_headers(headers)
     -- 如果未啟用脫敏，直接返回原始 headers
-    if not _config.enable_sanitization then
+    if not init_config().enable_sanitization then
         return headers
     end
     
@@ -135,10 +227,10 @@ local function sanitize_headers(headers)
         local should_sanitize = false
         
         -- 檢查是否需要脫敏
-        if (_config.sanitization_rules.auth and string_match(key_lower, "auth")) or
-           (_config.sanitization_rules.cookie and string_match(key_lower, "cookie")) or
-           (_config.sanitization_rules.token and string_match(key_lower, "token")) or
-           _custom_sanitize_fields[key_lower] then
+        if (init_config().sanitization_rules.auth and string_match(key_lower, "auth")) or
+           (init_config().sanitization_rules.cookie and string_match(key_lower, "cookie")) or
+           (init_config().sanitization_rules.token and string_match(key_lower, "token")) or
+           init_config().custom_sanitize_fields[key_lower] then
             should_sanitize = true
         end
         
@@ -157,11 +249,11 @@ local function validate_trace_data(trace_data)
         return false, "Trace data is nil"
     end
     
-    if not trace_data.trace_id or string_len(trace_data.trace_id) ~= 32 then
+    if not trace_data.trace_id or string_len(trace_data.trace_id) ~= TRACE_ID_LENGTH then
         return false, "Invalid trace_id"
     end
     
-    if not trace_data.parent_id or string_len(trace_data.parent_id) ~= 16 then
+    if not trace_data.parent_id or string_len(trace_data.parent_id) ~= PARENT_ID_LENGTH then
         return false, "Invalid parent_id"
     end
     
@@ -170,7 +262,7 @@ end
 
 -- 更新監控指標（根據配置決定是否執行）
 local function update_metrics(start_time, success, batch_size)
-    if not _config.enable_metrics then
+    if not init_config().enable_metrics then
         return
     end
     
@@ -187,11 +279,9 @@ local function update_metrics(start_time, success, batch_size)
     end
 end
 
--- [其餘代碼保持不變...]
-
 -- 獲取監控指標
 function _M.get_metrics()
-    if not _config.enable_metrics then
+    if not init_config().enable_metrics then
         return nil, "Metrics collection is disabled"
     end
     return _metrics
@@ -200,13 +290,13 @@ end
 -- 獲取當前配置
 function _M.get_config()
     return {
-        enable = _config.enable,
-        enable_metrics = _config.enable_metrics,
-        enable_sanitization = _config.enable_sanitization,
-        sanitization_rules = _config.sanitization_rules,
-        batch_size = _config.batch_size,
-        flush_interval = _config.flush_interval,
-        service_name = _config.service_name
+        enable = init_config().enable,
+        enable_metrics = init_config().enable_metrics,
+        enable_sanitization = init_config().enable_sanitization,
+        sanitization_rules = init_config().sanitization_rules,
+        batch_size = init_config().batch_size,
+        flush_interval = init_config().flush_interval,
+        service_name = init_config().service_name
     }
 end
 

@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  openresty:
+    image: sppo55/openresty:1.27.1.1-1-alpine-uuid 
+    container_name: openresty
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./w3c_trace.lua:/usr/local/openresty/lualib/w3c_trace.lua:ro
+      # - ./logs:/usr/local/openresty/nginx/logs
+    environment:
+      - ENABLE_TRACE=on
+      - ENABLE_TRACE_METRICS=on
+      - TRACE_BACKEND_URL=http://webhook:8080
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+
+  webhook:
+    build:
+      context: ./webhook
+      dockerfile: Dockerfile
+    container_name: webhook
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./webhook/logs:/app/logs
+    environment:
+      - LOG_LEVEL=info
+      - METRICS_RETENTION=24h
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
