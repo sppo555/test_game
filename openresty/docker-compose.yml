@@ -3,9 +3,9 @@ version: '3.8'
 services:
   openresty:
     image: sppo55/openresty:1.27.1.1-1-alpine-uuid
-    environment:
+    # environment:
       # - JAEGER_ENDPOINT=http://jaeger:14268/api/traces    
-      - ZIPKIN_ENDPOINT=http://172.19.0.5:9411/api/v2/spans
+      # - ZIPKIN_ENDPOINT=http://172.19.0.5:9411/api/v2/spans
     container_name: openresty
     ports:
       - "80:80"
