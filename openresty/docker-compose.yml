@@ -4,7 +4,8 @@ services:
   openresty:
     image: sppo55/openresty:1.27.1.1-1-alpine-uuid
     environment:
-      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces    
+      # - JAEGER_ENDPOINT=http://jaeger:14268/api/traces    
+      - ZIPKIN_ENDPOINT=http://172.19.0.5:9411/api/v2/spans
     container_name: openresty
     ports:
       - "80:80"
@@ -50,8 +51,9 @@ services:
     ports:
       - "16686:16686"  # UI
       - "14268:14268"  # Collector HTTP
+      - "9411:9411"    # Zipkin collector
     environment:
-      # - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
       - COLLECTOR_OTLP_ENABLED=true
     networks:
       - app-network
